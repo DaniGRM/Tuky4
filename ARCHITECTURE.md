@@ -2,7 +2,9 @@
 
 ## Flujo de entrada
 
-- `index.php`, `tuky4gym.php` y `api.php` delegan en el router central.
+- `index.php` delega en el router central.
+- `tuky4gym.php` es solo un redirect legacy hacia `/gym`.
+- `api.php` responde 410 para forzar migracion a endpoints modulares.
 - `app/routes.php` define rutas y handlers.
 - `app/Core/Router.php` resuelve metodo + path y ejecuta controlador.
 - `router.php` permite front controller para `php -S`.
@@ -11,8 +13,11 @@
 
 - `app/bootstrap.php`: autoload simple para clases en `App\\...`.
 - `app/Core/Router.php`: router HTTP (GET/POST/ANY) con dispatch centralizado.
-- `app/Controllers/*`: logica de aplicacion y orquestacion.
+- `app/Controllers/*`: controladores de vistas por modulo.
+- `app/Controllers/Api/*`: controladores API por modulo.
 - `app/Core/View.php`: renderer de vistas (`.tpl.php` o `.php`).
+- `app/Core/Database.php`: proveedor central de conexion PDO.
+- `app/Core/JsonResponse.php`: respuesta JSON centralizada.
 - `app/routes.php`: registro de rutas de la aplicacion.
 - `views/*`: plantillas HTML separadas por modulo.
 
@@ -24,15 +29,31 @@
 
 ## Convencion para API
 
-- Agregar nueva accion en `ApiController::handle()`.
-- Implementar metodo privado por accion (`addX`, `getX`, `deleteX`).
+- Evitar controladores monoliticos por `action`.
+- Crear un `ApiController` por modulo (ejemplo: `GymApiController`).
+- Exponer endpoints explicitos por caso de uso.
 - Mantener respuestas JSON consistentes: `{ ok: bool, ... }`.
 
 ## Rutas actuales
 
 - `GET /` y `GET /index.php` -> `HomeController::index()`.
-- `GET /gym` y `GET /tuky4gym.php` -> `GymController::index()`.
-- `POST /gym`, `POST /tuky4gym.php`, `POST /api`, `POST /api.php` -> `ApiController::handle()`.
+- `GET /gym` -> `GymController::index()`.
+- `POST /api/gym/exercises/list` -> `GymApiController::listExercises()`.
+- `POST /api/gym/exercises/add` -> `GymApiController::addExercise()`.
+- `POST /api/gym/exercises/delete` -> `GymApiController::deleteExercise()`.
+- `POST /api/gym/records/add` -> `GymApiController::addRecord()`.
+- `POST /api/gym/records/history` -> `GymApiController::getHistory()`.
+- `POST /api/gym/records/delete` -> `GymApiController::deleteRecord()`.
+
+## Endpoints retirados
+
+- `/api.php` -> HTTP 410 (deprecated).
+- `/tuky4gym.php` -> redirect 301 a `/gym` en GET; API por ese path no soportada.
+
+## Politica de eliminacion legacy
+
+- Cuando un modulo migra a endpoints explicitos, se elimina el endpoint antiguo en la misma iteracion.
+- No mantener rutas alias legacy de forma indefinida.
 
 ## Base de datos
 

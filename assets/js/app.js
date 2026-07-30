@@ -19,10 +19,12 @@ let currentWeight = 20;
 let currentSeries = 4;
 let currentReps   = '';
 let historyChart  = null;
+const APP_BASE = location.pathname.replace(/\/[^/]*$/, '');
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
-function api(body) {
-  return fetch(location.pathname, {
+function api(path, body = {}) {
+  const url = `${APP_BASE}${path}`.replace(/\/\/{2,}/g, '/');
+  return fetch(url, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify(body),
@@ -109,7 +111,7 @@ function renderRepPills(series) {
 
 // ── Ejercicios ────────────────────────────────────────────────────────────────
 async function loadExercises() {
-  const res = await api({ action: 'get_exercises' });
+  const res = await api('/api/gym/exercises/list');
   if (!res.ok) return;
   lastExercises = res.data;
   renderExercises(res.data);
@@ -216,7 +218,7 @@ async function addExercise() {
   const name    = document.getElementById('ex-name').value.trim();
   const routine = document.getElementById('ex-routine').value || 'PECHO';
   if (!name) { toast('Escribe un nombre'); return; }
-  const res = await api({ action: 'add_exercise', name, routine });
+  const res = await api('/api/gym/exercises/add', { name, routine });
   if (!res.ok) { toast(res.msg || 'Error'); return; }
   document.getElementById('ex-name').value = '';
   document.querySelectorAll('#routine-pills .pill')
@@ -234,7 +236,7 @@ async function addRecord() {
   const rep_pattern = document.getElementById('rec-reps').value;
   const date        = document.getElementById('rec-date').value;
   if (!rep_pattern) { toast('Elige un patrón de repeticiones'); return; }
-  const res = await api({ action: 'add_record', exercise_id, weight, series, rep_pattern, date });
+  const res = await api('/api/gym/records/add', { exercise_id, weight, series, rep_pattern, date });
   if (!res.ok) { toast(res.msg || 'Error'); return; }
   closeModal('modal-record');
   toast('Registro guardado ✓');
@@ -243,13 +245,13 @@ async function addRecord() {
 
 async function deleteExercise(id, name) {
   if (!confirm(`¿Eliminar "${name}" y todos sus registros?`)) return;
-  const res = await api({ action: 'delete_exercise', exercise_id: id });
+  const res = await api('/api/gym/exercises/delete', { exercise_id: id });
   if (res.ok) { toast('Ejercicio eliminado'); loadExercises(); }
 }
 
 async function deleteRecord(rid) {
   if (!confirm('¿Eliminar este registro?')) return;
-  const res = await api({ action: 'delete_record', record_id: rid });
+  const res = await api('/api/gym/records/delete', { record_id: rid });
   if (res.ok) {
     toast('Registro eliminado');
     loadExercises();
@@ -265,7 +267,7 @@ function computeVolume(r) {
 
 async function openHistory(id, name) {
   document.getElementById('history-title').textContent = name;
-  const res     = await api({ action: 'get_history', exercise_id: id });
+  const res     = await api('/api/gym/records/history', { exercise_id: id });
   const list    = document.getElementById('history-list');
   const section = document.getElementById('chart-section');
   list.innerHTML = '';
