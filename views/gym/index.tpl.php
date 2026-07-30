@@ -11,6 +11,7 @@
     <title>Tuky4Gym</title>
     <link rel="icon" type="image/x-icon" href="Tuky4Gym.ico">
     <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" referrerpolicy="no-referrer">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 
@@ -22,12 +23,22 @@
         </a>
 
         <h1>Tuky<span>4Gym</span></h1>
-        <div class="header-actions">
-            <div>
-                <button class="pill" data-val="GYM">GYM</button>
-                <button class="pill" data-val="CICLISMO">CICLISMO</button>
-                <button class="pill" data-val="RUNNING">RUNNING</button>
-            </div>
+    </header>
+
+    <main>
+        <div class="section-switch pills" aria-label="Secciones">
+            <button class="pill selected" data-val="GYM" aria-label="Gym" title="Gym">
+                <i class="fa-solid fa-dumbbell" aria-hidden="true"></i>
+            </button>
+            <button class="pill" data-val="CICLISMO" aria-label="Ciclismo" title="Ciclismo">
+                <i class="fa-solid fa-bicycle" aria-hidden="true"></i>
+            </button>
+            <button class="pill" data-val="RUNNING" aria-label="Running" title="Running">
+                <i class="fa-solid fa-person-running" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="section-header">
+            <span class="section-title">Mis ejercicios</span>
             <button class="btn btn-primary" onclick="openModal('modal-exercise')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="12" y1="5" x2="12" y2="19" />
@@ -35,12 +46,6 @@
                 </svg>
                 Nuevo ejercicio
             </button>
-        </div>
-    </header>
-
-    <main>
-        <div class="section-header">
-            <span class="section-title">Mis ejercicios</span>
         </div>
         <div class="filter-bar" id="filter-pills">
             <button class="pill" data-val="TODOS" onclick="setFilter('TODOS')">Todos</button>

@@ -64,11 +64,27 @@ header h1 span { color: var(--accent); }
 main { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem; }
 .section-header {
   display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem;
   margin-bottom: 1rem;
 }
 .section-title {
   font-size: 1rem; font-weight: 600; color: var(--muted);
   text-transform: uppercase; letter-spacing: 1px;
+}
+
+.section-switch {
+  margin-bottom: .85rem;
+}
+
+.section-switch .pill {
+  min-width: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-switch .pill i {
+  font-size: 1.65rem;
 }
 
 /* ── Exercise grid ── */
@@ -236,6 +252,21 @@ hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
   .btn { padding: .6rem 1rem; font-size: .88rem; }
 
   main { padding: 1rem .75rem; }
+
+  .section-header {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+  .section-header .section-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+  .section-header .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
 
   .grid { grid-template-columns: 1fr; gap: .75rem; }
 
