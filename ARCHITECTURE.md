@@ -18,6 +18,7 @@
 - `app/Core/View.php`: renderer de vistas (`.tpl.php` o `.php`).
 - `app/Core/Database.php`: proveedor central de conexion PDO.
 - `app/Core/JsonResponse.php`: respuesta JSON centralizada.
+- `catfan/medoo`: capa ligera de consultas para CRUD y operaciones simples.
 - `app/routes.php`: registro de rutas de la aplicacion.
 - `views/*`: plantillas HTML separadas por modulo.
 
@@ -33,6 +34,7 @@
 - Crear un `ApiController` por modulo (ejemplo: `GymApiController`).
 - Exponer endpoints explicitos por caso de uso.
 - Mantener respuestas JSON consistentes: `{ ok: bool, ... }`.
+- Usar Medoo para CRUD simple y reservar SQL directo (PDO) para queries complejas.
 
 ## Rutas actuales
 
