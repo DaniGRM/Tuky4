@@ -153,7 +153,7 @@
   <div class="section-label">Activas</div>
   <div class="app-grid">
 
-    <a class="app-card" href="tuky4gym.php">
+    <a class="app-card" href="/gym">
       <div class="app-icon icon-gym"><img src="Tuky4Gym.png" alt="Tuky4Gym" width="40" height="40"></div>
       <div class="app-name">Tuky4Gym</div>
       <div class="app-desc">Seguimiento de ejercicios, pesos y repeticiones con graficas de progreso.</div>

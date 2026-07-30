@@ -15,7 +15,7 @@
 <body>
 
 <header>
-  <a href="index.php" class="btn btn-ghost" title="Inicio">
+  <a href="/" class="btn btn-ghost" title="Inicio">
       <img src="Tuky4Gym.png" alt="Logo" width="64" height="64">
     </a>
 

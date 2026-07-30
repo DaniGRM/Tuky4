@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Database;
+use App\Core\JsonResponse;
 use Exception;
 use PDO;
 
@@ -14,49 +16,37 @@ final class ApiController
             return;
         }
 
-        require __DIR__ . '/../../db.php';
-
-        header('Content-Type: application/json');
-        $in = json_decode(file_get_contents('php://input'), true) ?? [];
-        $action = $in['action'] ?? '';
-
         try {
-            switch ($action) {
-                case 'add_exercise':
-                    $this->addExercise($pdo, $in);
-                    break;
+            $pdo = Database::connection();
+            $in = $this->readInput();
+            $action = $in['action'] ?? '';
 
-                case 'get_exercises':
-                    $this->getExercises($pdo);
-                    break;
+            $response = match ($action) {
+                'add_exercise' => $this->addExercise($pdo, $in),
+                'get_exercises' => $this->getExercises($pdo),
+                'add_record' => $this->addRecord($pdo, $in),
+                'get_history' => $this->getHistory($pdo, $in),
+                'delete_exercise' => $this->deleteExercise($pdo, $in),
+                'delete_record' => $this->deleteRecord($pdo, $in),
+                default => ['ok' => false, 'msg' => 'Accion desconocida'],
+            };
 
-                case 'add_record':
-                    $this->addRecord($pdo, $in);
-                    break;
-
-                case 'get_history':
-                    $this->getHistory($pdo, $in);
-                    break;
-
-                case 'delete_exercise':
-                    $this->deleteExercise($pdo, $in);
-                    break;
-
-                case 'delete_record':
-                    $this->deleteRecord($pdo, $in);
-                    break;
-
-                default:
-                    echo json_encode(['ok' => false, 'msg' => 'Accion desconocida']);
-            }
+            JsonResponse::send($response);
         } catch (Exception $e) {
-            echo json_encode(['ok' => false, 'msg' => $e->getMessage()]);
+            JsonResponse::error($e->getMessage(), 500);
         }
 
         exit;
     }
 
-    private function addExercise(PDO $pdo, array $in): void
+    private function readInput(): array
+    {
+        $decoded = json_decode(file_get_contents('php://input'), true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /** @return array<string, mixed> */
+    private function addExercise(PDO $pdo, array $in): array
     {
         $name = trim((string) ($in['name'] ?? ''));
         $routine = trim((string) ($in['routine'] ?? 'PECHO'));
@@ -67,22 +57,22 @@ final class ApiController
         }
 
         if ($name === '') {
-            echo json_encode(['ok' => false, 'msg' => 'Nombre vacio']);
-            return;
+            return ['ok' => false, 'msg' => 'Nombre vacio'];
         }
 
         $s = $pdo->prepare('INSERT INTO exercises (name, routine) VALUES (?, ?)');
         $s->execute([$name, $routine]);
 
-        echo json_encode([
+        return [
             'ok' => true,
             'id' => $pdo->lastInsertId(),
             'name' => $name,
             'routine' => $routine,
-        ]);
+        ];
     }
 
-    private function getExercises(PDO $pdo): void
+    /** @return array<string, mixed> */
+    private function getExercises(PDO $pdo): array
     {
         $rows = $pdo->query("
             SELECT e.id, e.name, e.routine,
@@ -96,10 +86,11 @@ final class ApiController
             ORDER BY e.routine, e.name
         ")->fetchAll(PDO::FETCH_ASSOC);
 
-        echo json_encode(['ok' => true, 'data' => $rows]);
+        return ['ok' => true, 'data' => $rows];
     }
 
-    private function addRecord(PDO $pdo, array $in): void
+    /** @return array<string, mixed> */
+    private function addRecord(PDO $pdo, array $in): array
     {
         $eid = (int) ($in['exercise_id'] ?? 0);
         $weight = (float) ($in['weight'] ?? 0);
@@ -108,16 +99,16 @@ final class ApiController
         $date = trim((string) ($in['date'] ?? date('Y-m-d')));
 
         if (!$eid || !$series || $pattern === '') {
-            echo json_encode(['ok' => false, 'msg' => 'Datos incompletos']);
-            return;
+            return ['ok' => false, 'msg' => 'Datos incompletos'];
         }
 
         $s = $pdo->prepare('INSERT INTO records (exercise_id, weight, series, rep_pattern, date) VALUES (?, ?, ?, ?, ?)');
         $s->execute([$eid, $weight, $series, $pattern, $date]);
-        echo json_encode(['ok' => true, 'id' => $pdo->lastInsertId()]);
+        return ['ok' => true, 'id' => $pdo->lastInsertId()];
     }
 
-    private function getHistory(PDO $pdo, array $in): void
+    /** @return array<string, mixed> */
+    private function getHistory(PDO $pdo, array $in): array
     {
         $eid = (int) ($in['exercise_id'] ?? 0);
 
@@ -130,21 +121,23 @@ final class ApiController
         ");
 
         $stmt->execute([$eid]);
-        echo json_encode(['ok' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        return ['ok' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)];
     }
 
-    private function deleteExercise(PDO $pdo, array $in): void
+    /** @return array<string, mixed> */
+    private function deleteExercise(PDO $pdo, array $in): array
     {
         $eid = (int) ($in['exercise_id'] ?? 0);
         $pdo->prepare('DELETE FROM records WHERE exercise_id = ?')->execute([$eid]);
         $pdo->prepare('DELETE FROM exercises WHERE id = ?')->execute([$eid]);
-        echo json_encode(['ok' => true]);
+        return ['ok' => true];
     }
 
-    private function deleteRecord(PDO $pdo, array $in): void
+    /** @return array<string, mixed> */
+    private function deleteRecord(PDO $pdo, array $in): array
     {
         $rid = (int) ($in['record_id'] ?? 0);
         $pdo->prepare('DELETE FROM records WHERE id = ?')->execute([$rid]);
-        echo json_encode(['ok' => true]);
+        return ['ok' => true];
     }
 }
