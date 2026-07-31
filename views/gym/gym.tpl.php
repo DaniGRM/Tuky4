@@ -85,6 +85,11 @@
             <input type="hidden" id="rec-reps" value="">
         </div>
 
+        <div class="chart-meta" id="gym-preview-meta" style="margin-top:-.2rem;margin-bottom:.5rem">
+            <span class="chart-formula" id="gym-preview-text">Volumen estimado: -</span>
+            <span class="chart-delta" id="gym-progress-delta">Base</span>
+        </div>
+
         <div class="modal-footer">
             <button class="btn btn-ghost" onclick="closeModal('modal-record')">Cancelar</button>
             <button class="btn btn-primary" onclick="addRecord()">Guardar</button>

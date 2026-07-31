@@ -25,6 +25,11 @@ let bikeActivities = [];
 let bikeLoaded = false;
 let runningActivities = [];
 let runningLoaded = false;
+let gymPreviousVolume = null;
+let bikePreviousVolume = null;
+let runningPreviousVolume = null;
+let bikeDurationManual = false;
+let runningDurationManual = false;
 
 function setSection(section) {
   document.querySelectorAll('.section-switch .pill').forEach(p =>
@@ -63,17 +68,132 @@ function formatDuration(minutes) {
 function computeBikeVolume(r) {
   const distance = Math.max(0, toNum(r.distance));
   const speed = Math.max(0, toNum(r.avg_speed));
-  const durationHours = Math.max(0, toNum(r.duration)) / 60;
   const elevationFactor = 1 + (Math.max(0, toNum(r.elevation)) / 1000);
-  return Math.round(distance * speed * durationHours * elevationFactor * 10) / 10;
+  return Math.round(distance * speed * elevationFactor * 10) / 10;
 }
 
 function computeRunningVolume(r) {
   const distance = Math.max(0, toNum(r.distance));
   const speed = Math.max(0, toNum(r.avg_speed));
-  const durationHours = Math.max(0, toNum(r.duration)) / 60;
   const elevationFactor = 1 + (Math.max(0, toNum(r.elevation)) / 1000);
-  return Math.round(distance * speed * durationHours * elevationFactor * 10) / 10;
+  return Math.round(distance * speed * elevationFactor * 10) / 10;
+}
+
+function sumRepsFromPattern(pattern) {
+  return String(pattern || '')
+    .split('-')
+    .map(Number)
+    .filter(n => n > 0)
+    .reduce((a, b) => a + b, 0);
+}
+
+function setPreviewDelta(el, current, previous) {
+  if (!el) return;
+
+  if (previous === null || previous === undefined || previous <= 0) {
+    el.textContent = 'Base';
+    el.className = 'chart-delta';
+    return;
+  }
+
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct > 0) {
+    el.textContent = '▲ +' + pct + '%';
+    el.className = 'chart-delta up';
+  } else if (pct < 0) {
+    el.textContent = '▼ ' + pct + '%';
+    el.className = 'chart-delta down';
+  } else {
+    el.textContent = '= 0%';
+    el.className = 'chart-delta flat';
+  }
+}
+
+function computeDurationMinutes(distance, speed) {
+  const d = Math.max(0, toNum(distance));
+  const s = Math.max(0, toNum(speed));
+  if (d <= 0 || s <= 0) return 0;
+  return Math.max(1, Math.round((d / s) * 60));
+}
+
+function refreshBikeDurationAuto() {
+  if (bikeDurationManual) return;
+  const distance = document.getElementById('bike-distance')?.value || 0;
+  const speed = document.getElementById('bike-avg-speed')?.value || 0;
+  const duration = computeDurationMinutes(distance, speed);
+  const durationEl = document.getElementById('bike-duration');
+  if (!durationEl) return;
+  durationEl.value = duration > 0 ? String(duration) : '';
+}
+
+function refreshRunningDurationAuto() {
+  if (runningDurationManual) return;
+  const distance = document.getElementById('running-distance')?.value || 0;
+  const speed = document.getElementById('running-avg-speed')?.value || 0;
+  const duration = computeDurationMinutes(distance, speed);
+  const durationEl = document.getElementById('running-duration');
+  if (!durationEl) return;
+  durationEl.value = duration > 0 ? String(duration) : '';
+}
+
+function updateGymProgressPreview() {
+  const textEl = document.getElementById('gym-preview-text');
+  const deltaEl = document.getElementById('gym-progress-delta');
+  if (!textEl || !deltaEl) return;
+
+  const weight = toNum(document.getElementById('rec-weight')?.value || 0);
+  const repsTotal = sumRepsFromPattern(document.getElementById('rec-reps')?.value || '');
+  const volume = Math.round(weight * repsTotal * 10) / 10;
+
+  textEl.textContent = `Volumen estimado: ${formatNum(volume, 1)} kg·rep`;
+  setPreviewDelta(deltaEl, volume, gymPreviousVolume);
+}
+
+function updateBikeProgressPreview() {
+  const textEl = document.getElementById('bike-preview-text');
+  const deltaEl = document.getElementById('bike-progress-delta');
+  if (!textEl || !deltaEl) return;
+
+  const volume = computeBikeVolume({
+    distance: document.getElementById('bike-distance')?.value || 0,
+    avg_speed: document.getElementById('bike-avg-speed')?.value || 0,
+    duration: document.getElementById('bike-duration')?.value || 0,
+    elevation: document.getElementById('bike-elevation')?.value || 0,
+  });
+
+  textEl.textContent = `Volumen estimado: ${formatNum(volume, 1)}`;
+  setPreviewDelta(deltaEl, volume, bikePreviousVolume);
+}
+
+function updateRunningProgressPreview() {
+  const textEl = document.getElementById('running-preview-text');
+  const deltaEl = document.getElementById('running-progress-delta');
+  if (!textEl || !deltaEl) return;
+
+  const volume = computeRunningVolume({
+    distance: document.getElementById('running-distance')?.value || 0,
+    avg_speed: document.getElementById('running-avg-speed')?.value || 0,
+    duration: document.getElementById('running-duration')?.value || 0,
+    elevation: document.getElementById('running-elevation')?.value || 0,
+  });
+
+  textEl.textContent = `Volumen estimado: ${formatNum(volume, 1)}`;
+  setPreviewDelta(deltaEl, volume, runningPreviousVolume);
+}
+
+function buildProgressBadge(currentValue, previousValue) {
+  if (previousValue === null || previousValue === undefined || previousValue <= 0) {
+    return '<span class="badge" style="opacity:.75">Base</span>';
+  }
+
+  const pct = Math.round(((currentValue - previousValue) / previousValue) * 100);
+  if (pct > 0) {
+    return `<span class="badge-green badge">▲ +${pct}%</span>`;
+  }
+  if (pct < 0) {
+    return `<span class="badge" style="background:rgba(255,101,132,.15);color:var(--accent2)">▼ ${pct}%</span>`;
+  }
+  return '<span class="badge">= 0%</span>';
 }
 
 function initDatePickers() {
@@ -171,6 +291,8 @@ function findBikeActivityById(activityId) {
 function openBikeRecordModal(activityId, name) {
   const activity = findBikeActivityById(activityId);
   const last = activity?.latestRecord || null;
+  bikePreviousVolume = last ? computeBikeVolume(last) : null;
+  bikeDurationManual = false;
 
   document.getElementById('bike-activity-id').value = activityId;
   document.getElementById('bike-record-title').textContent = name;
@@ -179,6 +301,8 @@ function openBikeRecordModal(activityId, name) {
   document.getElementById('bike-avg-speed').value = last ? formatNum(last.avg_speed) : '';
   document.getElementById('bike-elevation').value = last ? String(parseInt(last.elevation, 10) || 0) : '';
   document.getElementById('bike-duration').value = last ? String(parseInt(last.duration, 10) || 0) : '';
+  if (!last) refreshBikeDurationAuto();
+  updateBikeProgressPreview();
   openModal('modal-bike-record');
 }
 
@@ -408,15 +532,19 @@ async function openBikeHistory(activityId, name) {
     },
   });
 
-  res.data.forEach(r => {
+  res.data.forEach((r, i) => {
     const div = document.createElement('div');
     div.className = 'history-item';
     const vol = computeBikeVolume(r);
+    const prev = res.data[i + 1] || null;
+    const prevVol = prev ? computeBikeVolume(prev) : null;
+    const progressBadge = buildProgressBadge(vol, prevVol);
     div.innerHTML = `
       <span class="hi-date">${formatDate(r.date)}</span>
       <span class="hi-detail">
         <span class="badge-green badge">${formatNum(r.distance)} km</span>
         <span class="badge">${formatNum(r.avg_speed)} km/h</span>
+        ${progressBadge}
         <span style="font-size:.75rem;color:var(--muted)">${r.elevation} m · ${formatDuration(r.duration)} · Vol ${formatNum(vol, 1)}</span>
       </span>
       <span class="hi-action">
@@ -525,6 +653,8 @@ function findRunningActivityById(activityId) {
 function openRunningRecordModal(activityId, name) {
   const activity = findRunningActivityById(activityId);
   const last = activity?.latestRecord || null;
+  runningPreviousVolume = last ? computeRunningVolume(last) : null;
+  runningDurationManual = false;
 
   document.getElementById('running-activity-id').value = activityId;
   document.getElementById('running-record-title').textContent = name;
@@ -533,6 +663,8 @@ function openRunningRecordModal(activityId, name) {
   document.getElementById('running-avg-speed').value = last ? formatNum(last.avg_speed) : '';
   document.getElementById('running-elevation').value = last ? String(parseInt(last.elevation, 10) || 0) : '';
   document.getElementById('running-duration').value = last ? String(parseInt(last.duration, 10) || 0) : '';
+  if (!last) refreshRunningDurationAuto();
+  updateRunningProgressPreview();
   openModal('modal-running-record');
 }
 
@@ -761,15 +893,19 @@ async function openRunningHistory(activityId, name) {
     },
   });
 
-  res.data.forEach(r => {
+  res.data.forEach((r, i) => {
     const div = document.createElement('div');
     div.className = 'history-item';
     const vol = computeRunningVolume(r);
+    const prev = res.data[i + 1] || null;
+    const prevVol = prev ? computeRunningVolume(prev) : null;
+    const progressBadge = buildProgressBadge(vol, prevVol);
     div.innerHTML = `
       <span class="hi-date">${formatDate(r.date)}</span>
       <span class="hi-detail">
         <span class="badge-green badge">${formatNum(r.distance)} km</span>
         <span class="badge">${formatNum(r.avg_speed)} km/h</span>
+        ${progressBadge}
         <span style="font-size:.75rem;color:var(--muted)">${r.elevation} m · ${formatDuration(r.duration)} · Vol ${formatNum(vol, 1)}</span>
       </span>
       <span class="hi-action">
@@ -823,6 +959,7 @@ function changeWeight(delta) {
   document.getElementById('weight-display').textContent =
     currentWeight % 1 === 0 ? currentWeight : currentWeight.toFixed(1);
   document.getElementById('rec-weight').value = currentWeight;
+  updateGymProgressPreview();
 }
 
 // ── Pill selectors ────────────────────────────────────────────────────────────
@@ -838,6 +975,7 @@ function selectPill(group, el) {
   } else {
     currentReps = el.dataset.val;
     document.getElementById('rec-reps').value = currentReps;
+    updateGymProgressPreview();
   }
 }
 
@@ -860,6 +998,7 @@ function renderRepPills(series) {
   if (patterns[0]) {
     currentReps = patterns[0];
     document.getElementById('rec-reps').value = patterns[0];
+    updateGymProgressPreview();
   }
 }
 
@@ -967,6 +1106,12 @@ function openRecordModal(id, name, lastWeight, lastSeries, lastReps) {
       document.getElementById('rec-reps').value = lastReps;
     }
   }
+  const baselineWeight = toNum(lastWeight || 0);
+  const baselineReps = sumRepsFromPattern(lastReps || '');
+  gymPreviousVolume = baselineWeight > 0 && baselineReps > 0
+    ? Math.round(baselineWeight * baselineReps * 10) / 10
+    : null;
+  updateGymProgressPreview();
   openModal('modal-record');
 }
 
@@ -1180,16 +1325,20 @@ async function openHistory(id, name) {
     },
   });
 
-  res.data.forEach(r => {
+  res.data.forEach((r, i) => {
     const div = document.createElement('div');
     div.className = 'history-item';
     const w = parseFloat(r.weight) % 1 === 0 ? r.weight : parseFloat(r.weight).toFixed(1);
     const vol = computeVolume(r);
+    const prev = res.data[i + 1] || null;
+    const prevVol = prev ? computeVolume(prev) : null;
+    const progressBadge = buildProgressBadge(vol, prevVol);
     div.innerHTML = `
       <span class="hi-date">${formatDate(r.date)}</span>
       <span class="hi-detail">
         <span class="badge-green badge">${w} kg</span>
         <span class="badge">${r.series} × ${esc(r.rep_pattern)}</span>
+        ${progressBadge}
         <span style="font-size:.75rem;color:var(--muted)">${vol} kg·rep</span>
       </span>
       <span class="hi-action">
@@ -1228,6 +1377,32 @@ if (runningNameInput) {
     if (e.key === 'Enter') addRunningActivity();
   });
 }
+
+['bike-distance', 'bike-avg-speed', 'bike-elevation', 'bike-duration'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    if (id === 'bike-duration') {
+      bikeDurationManual = true;
+    } else {
+      refreshBikeDurationAuto();
+    }
+    updateBikeProgressPreview();
+  });
+});
+
+['running-distance', 'running-avg-speed', 'running-elevation', 'running-duration'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    if (id === 'running-duration') {
+      runningDurationManual = true;
+    } else {
+      refreshRunningDurationAuto();
+    }
+    updateRunningProgressPreview();
+  });
+});
 
 initDatePickers();
 renderRepPills(4);

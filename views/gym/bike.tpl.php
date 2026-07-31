@@ -60,6 +60,11 @@
             <input type="number" id="bike-duration" step="1" min="1" placeholder="0">
         </div>
 
+        <div class="chart-meta" id="bike-preview-meta" style="margin-top:-.2rem;margin-bottom:.5rem">
+            <span class="chart-formula" id="bike-preview-text">Volumen estimado: -</span>
+            <span class="chart-delta" id="bike-progress-delta">Base</span>
+        </div>
+
         <div class="modal-footer">
             <button class="btn btn-ghost" onclick="closeModal('modal-bike-record')">Cancelar</button>
             <button class="btn btn-primary" onclick="addBikeActivityRecord()">Guardar</button>
@@ -76,7 +81,7 @@
                 <canvas id="bike-history-chart"></canvas>
             </div>
             <div class="chart-meta">
-                <span class="chart-formula">Volumen bike = distancia x velocidad x (duracion/60) x (1 + desnivel/1000)</span>
+                <span class="chart-formula">Volumen bike = distancia x velocidad x (1 + desnivel/1000)</span>
                 <span class="chart-delta" id="bike-chart-delta"></span>
             </div>
         </div>

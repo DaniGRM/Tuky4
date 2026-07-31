@@ -60,6 +60,11 @@
             <input type="number" id="running-duration" step="1" min="1" placeholder="0">
         </div>
 
+        <div class="chart-meta" id="running-preview-meta" style="margin-top:-.2rem;margin-bottom:.5rem">
+            <span class="chart-formula" id="running-preview-text">Volumen estimado: -</span>
+            <span class="chart-delta" id="running-progress-delta">Base</span>
+        </div>
+
         <div class="modal-footer">
             <button class="btn btn-ghost" onclick="closeModal('modal-running-record')">Cancelar</button>
             <button class="btn btn-primary" onclick="addRunningActivityRecord()">Guardar</button>
@@ -76,7 +81,7 @@
                 <canvas id="running-history-chart"></canvas>
             </div>
             <div class="chart-meta">
-                <span class="chart-formula">Volumen running = distancia x velocidad x (duracion/60) x (1 + desnivel/1000)</span>
+                <span class="chart-formula">Volumen running = distancia x velocidad x (1 + desnivel/1000)</span>
                 <span class="chart-delta" id="running-chart-delta"></span>
             </div>
         </div>
