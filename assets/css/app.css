@@ -146,6 +146,40 @@ main { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem; }
 }
 .field input:focus, .field select:focus { border-color: var(--accent); }
 
+/* ── Flatpickr ── */
+.flatpickr-calendar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month .flatpickr-monthDropdown-months,
+.flatpickr-current-month input.cur-year {
+  color: var(--text);
+  fill: var(--text);
+}
+.flatpickr-weekday,
+.flatpickr-day {
+  color: var(--text);
+}
+.flatpickr-day.flatpickr-disabled,
+.flatpickr-day.flatpickr-disabled:hover {
+  color: var(--muted);
+}
+.flatpickr-day.today {
+  border-color: var(--accent2);
+}
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange,
+.flatpickr-day.selected:hover,
+.flatpickr-day.startRange:hover,
+.flatpickr-day.endRange:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* ── Weight incrementer ── */
 .weight-ctrl { display: flex; align-items: center; gap: .6rem; }
 .weight-ctrl button {

@@ -21,4 +21,12 @@ $router->post('/api/gym/records/add', [GymApiController::class, 'addRecord']);
 $router->post('/api/gym/records/history', [GymApiController::class, 'getHistory']);
 $router->post('/api/gym/records/delete', [GymApiController::class, 'deleteRecord']);
 
+$router->post('/api/gym/activities/list', [GymApiController::class, 'listActivities']);
+$router->post('/api/gym/activities/add', [GymApiController::class, 'addActivity']);
+$router->post('/api/gym/activities/delete', [GymApiController::class, 'deleteActivity']);
+
+$router->post('/api/gym/activities-records/add', [GymApiController::class, 'addActivityRecord']);
+$router->post('/api/gym/activities-records/history', [GymApiController::class, 'getActivityHistory']);
+$router->post('/api/gym/activities-records/delete', [GymApiController::class, 'deleteActivityRecord']);
+
 return $router;

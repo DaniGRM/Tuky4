@@ -5,6 +5,36 @@ namespace App\Controllers\Api;
 
 final class GymApiController extends BaseApiController
 {
+    public function listActivities(): void
+    {
+        $this->run('listActivitiesAction');
+    }
+
+    public function addActivity(): void
+    {
+        $this->run('addActivityAction');
+    }
+
+    public function addActivityRecord(): void
+    {
+        $this->run('addActivityRecordAction');
+    }
+
+    public function getActivityHistory(): void
+    {
+        $this->run('getActivityHistoryAction');
+    }
+
+    public function deleteActivity(): void
+    {
+        $this->run('deleteActivityAction');
+    }
+
+    public function deleteActivityRecord(): void
+    {
+        $this->run('deleteActivityRecordAction');
+    }
+
     public function listExercises(): void
     {
         $this->run('listExercisesAction');
@@ -33,6 +63,155 @@ final class GymApiController extends BaseApiController
     public function deleteRecord(): void
     {
         $this->run('deleteRecordAction');
+    }
+
+    /** @return array<string, mixed> */
+    protected function listActivitiesAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $type = strtolower(trim((string) ($in['type'] ?? '')));
+        $allowedTypes = ['bike', 'running'];
+
+        $where = [
+            'ORDER' => ['created_at' => 'DESC', 'id' => 'DESC'],
+        ];
+
+        if ($type !== '') {
+            if (!in_array($type, $allowedTypes, true)) {
+                return ['ok' => false, 'msg' => 'Tipo invalido'];
+            }
+            $where['type'] = $type;
+        }
+
+        $rows = $db->select('activities', ['id', 'name', 'type', 'created_at'], $where);
+        return ['ok' => true, 'data' => $rows ?: []];
+    }
+
+    /** @return array<string, mixed> */
+    protected function addActivityAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $name = trim((string) ($in['name'] ?? ''));
+        $type = strtolower(trim((string) ($in['type'] ?? '')));
+        $allowedTypes = ['bike', 'running'];
+
+        if ($name === '') {
+            return ['ok' => false, 'msg' => 'Nombre vacio'];
+        }
+        if (!in_array($type, $allowedTypes, true)) {
+            return ['ok' => false, 'msg' => 'Tipo invalido'];
+        }
+
+        $db->insert('activities', [
+            'name' => $name,
+            'type' => $type,
+        ]);
+
+        return [
+            'ok' => true,
+            'id' => $this->lastInsertId(),
+            'name' => $name,
+            'type' => $type,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    protected function addActivityRecordAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $activityId = (int) ($in['activity_id'] ?? 0);
+        $date = trim((string) ($in['date'] ?? date('Y-m-d')));
+        $distance = (float) ($in['distance'] ?? 0);
+        $avgSpeed = (float) ($in['avg_speed'] ?? 0);
+        $elevation = (int) ($in['elevation'] ?? 0);
+        $duration = (int) ($in['duration'] ?? 0);
+
+        if ($activityId <= 0) {
+            return ['ok' => false, 'msg' => 'Actividad invalida'];
+        }
+        if ($distance <= 0 || $avgSpeed <= 0 || $duration <= 0) {
+            return ['ok' => false, 'msg' => 'Distancia, velocidad y duracion deben ser mayores que 0'];
+        }
+
+        $exists = $db->has('activities', ['id' => $activityId]);
+        if (!$exists) {
+            return ['ok' => false, 'msg' => 'Actividad no encontrada'];
+        }
+
+        $db->insert('activities_records', [
+            'activity_id' => $activityId,
+            'date' => $date,
+            'distance' => $distance,
+            'avg_speed' => $avgSpeed,
+            'elevation' => $elevation,
+            'duration' => $duration,
+        ]);
+
+        return ['ok' => true, 'id' => $this->lastInsertId()];
+    }
+
+    /** @return array<string, mixed> */
+    protected function getActivityHistoryAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+        $activityId = (int) ($in['activity_id'] ?? 0);
+
+        if ($activityId <= 0) {
+            return ['ok' => false, 'msg' => 'Actividad invalida'];
+        }
+
+        $rows = $db->select('activities_records', [
+            'id',
+            'activity_id',
+            'date',
+            'distance',
+            'avg_speed',
+            'elevation',
+            'duration',
+        ], [
+            'activity_id' => $activityId,
+            'ORDER' => ['date' => 'DESC', 'id' => 'DESC'],
+            'LIMIT' => 50,
+        ]);
+
+        return ['ok' => true, 'data' => $rows ?: []];
+    }
+
+    /** @return array<string, mixed> */
+    protected function deleteActivityAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $activityId = (int) ($in['activity_id'] ?? 0);
+        if ($activityId <= 0) {
+            return ['ok' => false, 'msg' => 'Actividad invalida'];
+        }
+
+        $db->delete('activities', ['id' => $activityId]);
+        return ['ok' => true];
+    }
+
+    /** @return array<string, mixed> */
+    protected function deleteActivityRecordAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $recordId = (int) ($in['record_id'] ?? 0);
+        if ($recordId <= 0) {
+            return ['ok' => false, 'msg' => 'Registro invalido'];
+        }
+
+        $db->delete('activities_records', ['id' => $recordId]);
+        return ['ok' => true];
     }
 
     /** @return array<string, mixed> */

@@ -19,6 +19,793 @@ let currentWeight = 20;
 let currentSeries = 4;
 let currentReps = '';
 let historyChart = null;
+let bikeHistoryChart = null;
+let runningHistoryChart = null;
+let bikeActivities = [];
+let bikeLoaded = false;
+let runningActivities = [];
+let runningLoaded = false;
+
+function setSection(section) {
+  document.querySelectorAll('.section-switch .pill').forEach(p =>
+    p.classList.toggle('selected', p.dataset.val === section)
+  );
+  document.getElementById('gym-section').style.display = section === 'GYM' ? '' : 'none';
+  document.getElementById('bike-section').style.display = section === 'BIKE' ? '' : 'none';
+  document.getElementById('running-section').style.display = section === 'RUNNING' ? '' : 'none';
+
+  if (section === 'BIKE' && !bikeLoaded) {
+    loadBikeActivities();
+  }
+  if (section === 'RUNNING' && !runningLoaded) {
+    loadRunningActivities();
+  }
+}
+
+function toNum(n) {
+  const value = Number(n);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function formatNum(n, digits = 2) {
+  const value = toNum(n);
+  return value % 1 === 0 ? String(value) : value.toFixed(digits);
+}
+
+function formatDuration(minutes) {
+  const total = Math.max(0, parseInt(minutes, 10) || 0);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${m} min`;
+  return `${h} h ${m.toString().padStart(2, '0')} min`;
+}
+
+function computeBikeVolume(r) {
+  const distance = Math.max(0, toNum(r.distance));
+  const speed = Math.max(0, toNum(r.avg_speed));
+  const durationHours = Math.max(0, toNum(r.duration)) / 60;
+  const elevationFactor = 1 + (Math.max(0, toNum(r.elevation)) / 1000);
+  return Math.round(distance * speed * durationHours * elevationFactor * 10) / 10;
+}
+
+function computeRunningVolume(r) {
+  const distance = Math.max(0, toNum(r.distance));
+  const speed = Math.max(0, toNum(r.avg_speed));
+  const durationHours = Math.max(0, toNum(r.duration)) / 60;
+  const elevationFactor = 1 + (Math.max(0, toNum(r.elevation)) / 1000);
+  return Math.round(distance * speed * durationHours * elevationFactor * 10) / 10;
+}
+
+function initDatePickers() {
+  if (typeof flatpickr !== 'function') return;
+
+  const localeEs = (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.es)
+    ? window.flatpickr.l10ns.es
+    : undefined;
+
+  const options = {
+    locale: localeEs,
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'd/m/Y',
+    disableMobile: true,
+    allowInput: false,
+    defaultDate: 'today',
+  };
+
+  ['#rec-date', '#bike-date', '#running-date'].forEach(selector => {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    if (el._flatpickr) return;
+    flatpickr(el, options);
+  });
+}
+
+async function loadBikeActivities() {
+  const res = await api('/api/gym/activities/list', { type: 'bike' });
+  if (!res.ok) {
+    toast(res.msg || 'Error cargando actividades');
+    return;
+  }
+
+  const base = Array.isArray(res.data) ? res.data : [];
+  const withLatest = await Promise.all(base.map(async activity => {
+    const historyRes = await api('/api/gym/activities-records/history', { activity_id: activity.id });
+    const latest = historyRes.ok && historyRes.data && historyRes.data.length ? historyRes.data[0] : null;
+    return { ...activity, latestRecord: latest };
+  }));
+
+  bikeActivities = withLatest;
+  bikeLoaded = true;
+  renderBikeActivities(withLatest);
+}
+
+function renderBikeActivities(data) {
+  const grid = document.getElementById('bike-activity-grid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+  if (!data.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.id = 'bike-empty-state';
+    empty.style.gridColumn = '1/-1';
+    empty.innerHTML = '<p>Aun no hay actividades de ciclismo.</p>';
+    grid.appendChild(empty);
+    return;
+  }
+
+  data.forEach(activity => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const r = activity.latestRecord;
+
+    card.innerHTML = `
+      <div class="card-name">${esc(activity.name)}</div>
+      ${r ? `
+        <div class="card-record">
+          <span class="badge-green badge">${formatNum(r.distance)} km</span>
+          <span class="badge">${formatNum(r.avg_speed)} km/h</span>
+        </div>
+        <div class="card-date">${formatDate(r.date)} · ${r.elevation} m · ${formatDuration(r.duration)}</div>
+      ` : '<div class="card-empty">Sin registros aún</div>'}
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="openBikeRecordModal(${activity.id},'${esc(activity.name)}')">+ Registro</button>
+        <button class="btn btn-ghost btn-sm" onclick="openBikeHistory(${activity.id},'${esc(activity.name)}')">Historial</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Eliminar" onclick="deleteBikeActivity(${activity.id},'${esc(activity.name)}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function findBikeActivityById(activityId) {
+  const id = parseInt(activityId, 10) || 0;
+  return bikeActivities.find(a => parseInt(a.id, 10) === id) || null;
+}
+
+function openBikeRecordModal(activityId, name) {
+  const activity = findBikeActivityById(activityId);
+  const last = activity?.latestRecord || null;
+
+  document.getElementById('bike-activity-id').value = activityId;
+  document.getElementById('bike-record-title').textContent = name;
+  document.getElementById('bike-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('bike-distance').value = last ? formatNum(last.distance) : '';
+  document.getElementById('bike-avg-speed').value = last ? formatNum(last.avg_speed) : '';
+  document.getElementById('bike-elevation').value = last ? String(parseInt(last.elevation, 10) || 0) : '';
+  document.getElementById('bike-duration').value = last ? String(parseInt(last.duration, 10) || 0) : '';
+  openModal('modal-bike-record');
+}
+
+async function addBikeActivity() {
+  const nameEl = document.getElementById('bike-activity-name');
+  const name = (nameEl?.value || '').trim();
+
+  if (!name) {
+    toast('Escribe un nombre');
+    return;
+  }
+
+  const res = await api('/api/gym/activities/add', { name, type: 'bike' });
+  if (!res.ok) {
+    toast(res.msg || 'Error');
+    return;
+  }
+
+  // Render optimista para reflejar la nueva actividad al instante.
+  bikeActivities = [
+    {
+      id: parseInt(res.id, 10) || Date.now(),
+      name,
+      type: 'bike',
+      created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      latestRecord: null,
+    },
+    ...bikeActivities,
+  ];
+  renderBikeActivities(bikeActivities);
+
+  nameEl.value = '';
+  closeModal('modal-bike-activity');
+  toast('Actividad añadida');
+  await loadBikeActivities();
+}
+
+async function addBikeActivityRecord() {
+  const activity_id = parseInt(document.getElementById('bike-activity-id').value, 10) || 0;
+  const date = document.getElementById('bike-date').value;
+  const distance = toNum(document.getElementById('bike-distance').value);
+  const avg_speed = toNum(document.getElementById('bike-avg-speed').value);
+  const elevation = parseInt(document.getElementById('bike-elevation').value, 10) || 0;
+  const duration = parseInt(document.getElementById('bike-duration').value, 10) || 0;
+
+  if (!activity_id || distance <= 0 || avg_speed <= 0 || duration <= 0) {
+    toast('Rellena actividad, distancia, velocidad y duracion');
+    return;
+  }
+
+  const res = await api('/api/gym/activities-records/add', {
+    activity_id,
+    date,
+    distance,
+    avg_speed,
+    elevation,
+    duration,
+  });
+
+  if (!res.ok) {
+    toast(res.msg || 'Error');
+    return;
+  }
+
+  closeModal('modal-bike-record');
+  toast('Registro guardado ✓');
+  await loadBikeActivities();
+}
+
+async function openBikeHistory(activityId, name) {
+  document.getElementById('bike-history-title').textContent = name;
+  const list = document.getElementById('bike-history-list');
+  const section = document.getElementById('bike-chart-section');
+  const deltaEl = document.getElementById('bike-chart-delta');
+  list.innerHTML = '';
+
+  const res = await api('/api/gym/activities-records/history', { activity_id: activityId });
+  if (!res.ok || !res.data.length) {
+    section.style.display = 'none';
+    list.innerHTML = '<p style="color:var(--muted);font-size:.9rem">Sin registros aun.</p>';
+    openModal('modal-bike-history');
+    return;
+  }
+
+  const chrono = [...res.data].reverse();
+  const volumes = chrono.map(computeBikeVolume);
+  const speeds = chrono.map(r => toNum(r.avg_speed));
+  const distances = chrono.map(r => toNum(r.distance));
+  const labels = chrono.map(r => formatDate(r.date));
+
+  const first = volumes[0];
+  const last = volumes[volumes.length - 1];
+  const pct = first > 0 ? Math.round((last - first) / first * 100) : 0;
+
+  if (volumes.length < 2) {
+    deltaEl.textContent = '';
+    deltaEl.className = 'chart-delta';
+  } else if (pct > 0) {
+    deltaEl.textContent = '▲ +' + pct + '%';
+    deltaEl.className = 'chart-delta up';
+  } else if (pct < 0) {
+    deltaEl.textContent = '▼ ' + pct + '%';
+    deltaEl.className = 'chart-delta down';
+  } else {
+    deltaEl.textContent = '= Sin cambio';
+    deltaEl.className = 'chart-delta flat';
+  }
+
+  section.style.display = '';
+  if (bikeHistoryChart) {
+    bikeHistoryChart.destroy();
+    bikeHistoryChart = null;
+  }
+
+  const ctx = document.getElementById('bike-history-chart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 190);
+  grad.addColorStop(0, 'rgba(108,99,255,0.4)');
+  grad.addColorStop(1, 'rgba(108,99,255,0)');
+
+  bikeHistoryChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Volumen bike',
+          data: volumes,
+          borderColor: '#6c63ff',
+          backgroundColor: grad,
+          borderWidth: 2.5,
+          pointBackgroundColor: '#6c63ff',
+          pointBorderColor: '#1a1d27',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
+          tension: 0.35,
+          yAxisID: 'yVol',
+        },
+        {
+          label: 'Velocidad',
+          data: speeds,
+          borderColor: '#ff6584',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5, 3],
+          pointBackgroundColor: '#ff6584',
+          pointBorderColor: '#1a1d27',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: false,
+          tension: 0.35,
+          yAxisID: 'ySpeed',
+        },
+        {
+          label: 'Distancia',
+          data: distances,
+          borderColor: '#22d3ee',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointBackgroundColor: '#22d3ee',
+          pointBorderColor: '#1a1d27',
+          pointBorderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: false,
+          tension: 0.35,
+          yAxisID: 'yDist',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: '#8892a4', font: { size: 11 }, boxWidth: 12, boxHeight: 2, padding: 12, usePointStyle: true, pointStyle: 'line' },
+        },
+        tooltip: {
+          backgroundColor: '#22263a',
+          borderColor: '#2e3348',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#8892a4',
+          padding: 10,
+          callbacks: {
+            title: (items) => labels[items[0].dataIndex],
+            label: (item) => {
+              if (item.dataset.label === 'Velocidad') return `Velocidad: ${item.parsed.y} km/h`;
+              if (item.dataset.label === 'Distancia') return `Distancia: ${item.parsed.y} km`;
+              return `Volumen bike: ${item.parsed.y}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: '#2e3348' },
+          ticks: { color: '#8892a4', font: { size: 11 }, maxRotation: 35 },
+        },
+        yVol: {
+          position: 'left',
+          grid: { color: '#2e3348' },
+          ticks: { color: '#6c63ff', font: { size: 10 } },
+          beginAtZero: false,
+          title: { display: true, text: 'Vol', color: '#6c63ff', font: { size: 10 } },
+        },
+        ySpeed: {
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#ff6584', font: { size: 10 } },
+          beginAtZero: false,
+          title: { display: true, text: 'km/h', color: '#ff6584', font: { size: 10 } },
+        },
+        yDist: {
+          position: 'right',
+          offset: true,
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#22d3ee', font: { size: 10 } },
+          beginAtZero: false,
+          title: { display: true, text: 'km', color: '#22d3ee', font: { size: 10 } },
+        },
+      },
+    },
+  });
+
+  res.data.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    const vol = computeBikeVolume(r);
+    div.innerHTML = `
+      <span class="hi-date">${formatDate(r.date)}</span>
+      <span class="hi-detail">
+        <span class="badge-green badge">${formatNum(r.distance)} km</span>
+        <span class="badge">${formatNum(r.avg_speed)} km/h</span>
+        <span style="font-size:.75rem;color:var(--muted)">${r.elevation} m · ${formatDuration(r.duration)} · Vol ${formatNum(vol, 1)}</span>
+      </span>
+      <span class="hi-action">
+        <button class="btn btn-ghost btn-sm btn-icon" title="Eliminar" onclick="deleteBikeRecord(${r.id})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </span>`;
+    list.appendChild(div);
+  });
+
+  openModal('modal-bike-history');
+}
+
+async function deleteBikeActivity(activityId, name) {
+  if (!confirm(`¿Eliminar "${name}" y todos sus registros?`)) return;
+  const res = await api('/api/gym/activities/delete', { activity_id: activityId });
+  if (res.ok) {
+    // Render optimista para ocultar la actividad sin recargar la pagina.
+    bikeActivities = bikeActivities.filter(a => parseInt(a.id, 10) !== parseInt(activityId, 10));
+    renderBikeActivities(bikeActivities);
+    toast('Actividad eliminada');
+    await loadBikeActivities();
+  }
+}
+
+async function deleteBikeRecord(recordId) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  const res = await api('/api/gym/activities-records/delete', { record_id: recordId });
+  if (res.ok) {
+    toast('Registro eliminado');
+    closeModal('modal-bike-history');
+    loadBikeActivities();
+  }
+}
+
+async function loadRunningActivities() {
+  const res = await api('/api/gym/activities/list', { type: 'running' });
+  if (!res.ok) {
+    toast(res.msg || 'Error cargando actividades');
+    return;
+  }
+
+  const base = Array.isArray(res.data) ? res.data : [];
+  const withLatest = await Promise.all(base.map(async activity => {
+    const historyRes = await api('/api/gym/activities-records/history', { activity_id: activity.id });
+    const latest = historyRes.ok && historyRes.data && historyRes.data.length ? historyRes.data[0] : null;
+    return { ...activity, latestRecord: latest };
+  }));
+
+  runningActivities = withLatest;
+  runningLoaded = true;
+  renderRunningActivities(withLatest);
+}
+
+function renderRunningActivities(data) {
+  const grid = document.getElementById('running-activity-grid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+  if (!data.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.id = 'running-empty-state';
+    empty.style.gridColumn = '1/-1';
+    empty.innerHTML = '<p>Aun no hay actividades de running.</p>';
+    grid.appendChild(empty);
+    return;
+  }
+
+  data.forEach(activity => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const r = activity.latestRecord;
+
+    card.innerHTML = `
+      <div class="card-name">${esc(activity.name)}</div>
+      ${r ? `
+        <div class="card-record">
+          <span class="badge-green badge">${formatNum(r.distance)} km</span>
+          <span class="badge">${formatNum(r.avg_speed)} km/h</span>
+        </div>
+        <div class="card-date">${formatDate(r.date)} · ${r.elevation} m · ${formatDuration(r.duration)}</div>
+      ` : '<div class="card-empty">Sin registros aún</div>'}
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="openRunningRecordModal(${activity.id},'${esc(activity.name)}')">+ Registro</button>
+        <button class="btn btn-ghost btn-sm" onclick="openRunningHistory(${activity.id},'${esc(activity.name)}')">Historial</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Eliminar" onclick="deleteRunningActivity(${activity.id},'${esc(activity.name)}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function findRunningActivityById(activityId) {
+  const id = parseInt(activityId, 10) || 0;
+  return runningActivities.find(a => parseInt(a.id, 10) === id) || null;
+}
+
+function openRunningRecordModal(activityId, name) {
+  const activity = findRunningActivityById(activityId);
+  const last = activity?.latestRecord || null;
+
+  document.getElementById('running-activity-id').value = activityId;
+  document.getElementById('running-record-title').textContent = name;
+  document.getElementById('running-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('running-distance').value = last ? formatNum(last.distance) : '';
+  document.getElementById('running-avg-speed').value = last ? formatNum(last.avg_speed) : '';
+  document.getElementById('running-elevation').value = last ? String(parseInt(last.elevation, 10) || 0) : '';
+  document.getElementById('running-duration').value = last ? String(parseInt(last.duration, 10) || 0) : '';
+  openModal('modal-running-record');
+}
+
+async function addRunningActivity() {
+  const nameEl = document.getElementById('running-activity-name');
+  const name = (nameEl?.value || '').trim();
+
+  if (!name) {
+    toast('Escribe un nombre');
+    return;
+  }
+
+  const res = await api('/api/gym/activities/add', { name, type: 'running' });
+  if (!res.ok) {
+    toast(res.msg || 'Error');
+    return;
+  }
+
+  runningActivities = [
+    {
+      id: parseInt(res.id, 10) || Date.now(),
+      name,
+      type: 'running',
+      created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      latestRecord: null,
+    },
+    ...runningActivities,
+  ];
+  renderRunningActivities(runningActivities);
+
+  nameEl.value = '';
+  closeModal('modal-running-activity');
+  toast('Actividad añadida');
+  await loadRunningActivities();
+}
+
+async function addRunningActivityRecord() {
+  const activity_id = parseInt(document.getElementById('running-activity-id').value, 10) || 0;
+  const date = document.getElementById('running-date').value;
+  const distance = toNum(document.getElementById('running-distance').value);
+  const avg_speed = toNum(document.getElementById('running-avg-speed').value);
+  const elevation = parseInt(document.getElementById('running-elevation').value, 10) || 0;
+  const duration = parseInt(document.getElementById('running-duration').value, 10) || 0;
+
+  if (!activity_id || distance <= 0 || avg_speed <= 0 || duration <= 0) {
+    toast('Rellena actividad, distancia, velocidad y duracion');
+    return;
+  }
+
+  const res = await api('/api/gym/activities-records/add', {
+    activity_id,
+    date,
+    distance,
+    avg_speed,
+    elevation,
+    duration,
+  });
+
+  if (!res.ok) {
+    toast(res.msg || 'Error');
+    return;
+  }
+
+  closeModal('modal-running-record');
+  toast('Registro guardado ✓');
+  await loadRunningActivities();
+}
+
+async function openRunningHistory(activityId, name) {
+  document.getElementById('running-history-title').textContent = name;
+  const list = document.getElementById('running-history-list');
+  const section = document.getElementById('running-chart-section');
+  const deltaEl = document.getElementById('running-chart-delta');
+  list.innerHTML = '';
+
+  const res = await api('/api/gym/activities-records/history', { activity_id: activityId });
+  if (!res.ok || !res.data.length) {
+    section.style.display = 'none';
+    list.innerHTML = '<p style="color:var(--muted);font-size:.9rem">Sin registros aun.</p>';
+    openModal('modal-running-history');
+    return;
+  }
+
+  const chrono = [...res.data].reverse();
+  const volumes = chrono.map(computeRunningVolume);
+  const speeds = chrono.map(r => toNum(r.avg_speed));
+  const distances = chrono.map(r => toNum(r.distance));
+  const labels = chrono.map(r => formatDate(r.date));
+
+  const first = volumes[0];
+  const last = volumes[volumes.length - 1];
+  const pct = first > 0 ? Math.round((last - first) / first * 100) : 0;
+
+  if (volumes.length < 2) {
+    deltaEl.textContent = '';
+    deltaEl.className = 'chart-delta';
+  } else if (pct > 0) {
+    deltaEl.textContent = '▲ +' + pct + '%';
+    deltaEl.className = 'chart-delta up';
+  } else if (pct < 0) {
+    deltaEl.textContent = '▼ ' + pct + '%';
+    deltaEl.className = 'chart-delta down';
+  } else {
+    deltaEl.textContent = '= Sin cambio';
+    deltaEl.className = 'chart-delta flat';
+  }
+
+  section.style.display = '';
+  if (runningHistoryChart) {
+    runningHistoryChart.destroy();
+    runningHistoryChart = null;
+  }
+
+  const ctx = document.getElementById('running-history-chart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 190);
+  grad.addColorStop(0, 'rgba(108,99,255,0.4)');
+  grad.addColorStop(1, 'rgba(108,99,255,0)');
+
+  runningHistoryChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Volumen running',
+          data: volumes,
+          borderColor: '#6c63ff',
+          backgroundColor: grad,
+          borderWidth: 2.5,
+          pointBackgroundColor: '#6c63ff',
+          pointBorderColor: '#1a1d27',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
+          tension: 0.35,
+          yAxisID: 'yVol',
+        },
+        {
+          label: 'Velocidad',
+          data: speeds,
+          borderColor: '#ff6584',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5, 3],
+          pointBackgroundColor: '#ff6584',
+          pointBorderColor: '#1a1d27',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: false,
+          tension: 0.35,
+          yAxisID: 'ySpeed',
+        },
+        {
+          label: 'Distancia',
+          data: distances,
+          borderColor: '#22d3ee',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointBackgroundColor: '#22d3ee',
+          pointBorderColor: '#1a1d27',
+          pointBorderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: false,
+          tension: 0.35,
+          yAxisID: 'yDist',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: '#8892a4', font: { size: 11 }, boxWidth: 12, boxHeight: 2, padding: 12, usePointStyle: true, pointStyle: 'line' },
+        },
+        tooltip: {
+          backgroundColor: '#22263a',
+          borderColor: '#2e3348',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#8892a4',
+          padding: 10,
+          callbacks: {
+            title: (items) => labels[items[0].dataIndex],
+            label: (item) => {
+              if (item.dataset.label === 'Velocidad') return `Velocidad: ${item.parsed.y} km/h`;
+              if (item.dataset.label === 'Distancia') return `Distancia: ${item.parsed.y} km`;
+              return `Volumen running: ${item.parsed.y}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: '#2e3348' },
+          ticks: { color: '#8892a4', font: { size: 11 }, maxRotation: 35 },
+        },
+        yVol: {
+          position: 'left',
+          grid: { color: '#2e3348' },
+          ticks: { color: '#6c63ff', font: { size: 10 } },
+          beginAtZero: false,
+          title: { display: true, text: 'Vol', color: '#6c63ff', font: { size: 10 } },
+        },
+        ySpeed: {
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#ff6584', font: { size: 10 } },
+          beginAtZero: false,
+          title: { display: true, text: 'km/h', color: '#ff6584', font: { size: 10 } },
+        },
+        yDist: {
+          position: 'right',
+          offset: true,
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#22d3ee', font: { size: 10 } },
+          beginAtZero: false,
+          title: { display: true, text: 'km', color: '#22d3ee', font: { size: 10 } },
+        },
+      },
+    },
+  });
+
+  res.data.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    const vol = computeRunningVolume(r);
+    div.innerHTML = `
+      <span class="hi-date">${formatDate(r.date)}</span>
+      <span class="hi-detail">
+        <span class="badge-green badge">${formatNum(r.distance)} km</span>
+        <span class="badge">${formatNum(r.avg_speed)} km/h</span>
+        <span style="font-size:.75rem;color:var(--muted)">${r.elevation} m · ${formatDuration(r.duration)} · Vol ${formatNum(vol, 1)}</span>
+      </span>
+      <span class="hi-action">
+        <button class="btn btn-ghost btn-sm btn-icon" title="Eliminar" onclick="deleteRunningRecord(${r.id})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </span>`;
+    list.appendChild(div);
+  });
+
+  openModal('modal-running-history');
+}
+
+async function deleteRunningActivity(activityId, name) {
+  if (!confirm(`¿Eliminar "${name}" y todos sus registros?`)) return;
+  const res = await api('/api/gym/activities/delete', { activity_id: activityId });
+  if (res.ok) {
+    runningActivities = runningActivities.filter(a => parseInt(a.id, 10) !== parseInt(activityId, 10));
+    renderRunningActivities(runningActivities);
+    toast('Actividad eliminada');
+    await loadRunningActivities();
+  }
+}
+
+async function deleteRunningRecord(recordId) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  const res = await api('/api/gym/activities-records/delete', { record_id: recordId });
+  if (res.ok) {
+    toast('Registro eliminado');
+    closeModal('modal-running-history');
+    await loadRunningActivities();
+  }
+}
 
 // ── Filtro por rutina ─────────────────────────────────────────────────────────
 function setFilter(f) {
@@ -428,5 +1215,20 @@ document.getElementById('ex-name').addEventListener('keydown', e => {
   if (e.key === 'Enter') addExercise();
 });
 
+const bikeNameInput = document.getElementById('bike-activity-name');
+if (bikeNameInput) {
+  bikeNameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') addBikeActivity();
+  });
+}
+
+const runningNameInput = document.getElementById('running-activity-name');
+if (runningNameInput) {
+  runningNameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') addRunningActivity();
+  });
+}
+
+initDatePickers();
 renderRepPills(4);
 loadExercises();
