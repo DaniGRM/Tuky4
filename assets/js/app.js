@@ -32,3 +32,29 @@ function formatDate(d) {
   const [y, m, day] = d.split('-');
   return `${day}/${m}/${y}`;
 }
+
+// ── Mobile UX: evitar zoom/focus nativo no deseado ─────────────────────────
+(function setupMobileGestureGuards() {
+  let lastTouchEnd = 0;
+
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  document.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+  }, { passive: false });
+
+  // En campos de fecha preferimos selector custom sin foco tactil nativo.
+  document.addEventListener('focusin', (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    if (t.matches('input[type="date"], .flatpickr-input')) {
+      t.blur();
+    }
+  });
+})();

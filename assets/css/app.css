@@ -22,6 +22,11 @@ body {
   padding-bottom: 6rem;
 }
 
+html, body {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* ── Header ── */
 header {
   background: linear-gradient(135deg, #1a1d27 0%, #22263a 100%);
