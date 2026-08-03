@@ -31,6 +31,11 @@ $router->post('/api/gym/activities-records/add', [GymApiController::class, 'addA
 $router->post('/api/gym/activities-records/history', [GymApiController::class, 'getActivityHistory']);
 $router->post('/api/gym/activities-records/delete', [GymApiController::class, 'deleteActivityRecord']);
 
+$router->post('/api/gym/steps/get', [GymApiController::class, 'getSteps']);
+$router->post('/api/gym/steps/save', [GymApiController::class, 'saveSteps']);
+$router->post('/api/gym/user-info/get', [GymApiController::class, 'getUserInfo']);
+$router->post('/api/gym/user-info/save', [GymApiController::class, 'saveUserInfo']);
+
 
 $router->get('/eat', [EatController::class, 'index']);
 

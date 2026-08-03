@@ -30,4 +30,9 @@
             <span class="eat-meal-kcal" id="eat-kcal-snacks">0 kcal</span>
         </button>
     </div>
+
+    <div class="card eat-energy-card" style="margin-top:1rem">
+        <div class="card-name">Balance energetico diario</div>
+        <div class="eat-energy-shell" id="eat-energy-list"></div>
+    </div>
 </section>

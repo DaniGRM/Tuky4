@@ -5,6 +5,26 @@ namespace App\Controllers\Api;
 
 final class GymApiController extends BaseApiController
 {
+    public function getUserInfo(): void
+    {
+        $this->run('getUserInfoAction');
+    }
+
+    public function saveUserInfo(): void
+    {
+        $this->run('saveUserInfoAction');
+    }
+
+    public function getSteps(): void
+    {
+        $this->run('getStepsAction');
+    }
+
+    public function saveSteps(): void
+    {
+        $this->run('saveStepsAction');
+    }
+
     public function listActivities(): void
     {
         $this->run('listActivitiesAction');
@@ -63,6 +83,150 @@ final class GymApiController extends BaseApiController
     public function deleteRecord(): void
     {
         $this->run('deleteRecordAction');
+    }
+
+    /** @return array<string, mixed> */
+    protected function getUserInfoAction(): array
+    {
+        $db = $this->medoo();
+
+        $row = $db->get('user_info', [
+            'id',
+            'daily_steps_goal',
+            'calorie_deficit_goal',
+            'sex',
+            'height_cm',
+            'age',
+        ], [
+            'ORDER' => ['id' => 'ASC'],
+        ]);
+
+        return [
+            'ok' => true,
+            'data' => [
+                'daily_steps_goal' => $row ? (int) ($row['daily_steps_goal'] ?? 0) : 0,
+                'calorie_deficit_goal' => $row ? (int) ($row['calorie_deficit_goal'] ?? 0) : 0,
+                'sex' => $row ? (string) ($row['sex'] ?? 'male') : 'male',
+                'height_cm' => $row ? (float) ($row['height_cm'] ?? 170) : 170,
+                'age' => $row ? (int) ($row['age'] ?? 30) : 30,
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    protected function saveUserInfoAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $dailyStepsGoal = max(0, (int) ($in['daily_steps_goal'] ?? 0));
+        $calorieDeficitGoal = (int) ($in['calorie_deficit_goal'] ?? 0);
+        $sex = strtolower(trim((string) ($in['sex'] ?? 'male')));
+        $heightCm = (float) ($in['height_cm'] ?? 0);
+        $age = (int) ($in['age'] ?? 0);
+
+        if (!in_array($sex, ['male', 'female'], true)) {
+            return ['ok' => false, 'msg' => 'Sexo invalido'];
+        }
+        if ($heightCm <= 0 || $heightCm > 260) {
+            return ['ok' => false, 'msg' => 'Altura invalida'];
+        }
+        if ($age <= 0 || $age > 120) {
+            return ['ok' => false, 'msg' => 'Edad invalida'];
+        }
+
+        $payload = [
+            'daily_steps_goal' => $dailyStepsGoal,
+            'calorie_deficit_goal' => $calorieDeficitGoal,
+            'sex' => $sex,
+            'height_cm' => round($heightCm, 2),
+            'age' => $age,
+        ];
+
+        $id = $db->get('user_info', 'id', ['ORDER' => ['id' => 'ASC']]);
+        if ($id) {
+            $db->update('user_info', $payload, ['id' => (int) $id]);
+        } else {
+            $db->insert('user_info', $payload);
+        }
+
+        return ['ok' => true, 'data' => $payload];
+    }
+
+    /** @return array<string, mixed> */
+    protected function getStepsAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $date = trim((string) ($in['date'] ?? date('Y-m-d')));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return ['ok' => false, 'msg' => 'Fecha invalida'];
+        }
+
+        $row = $db->get('user_info_register', ['id', 'steps', 'weight'], ['date' => $date]);
+        return [
+            'ok' => true,
+            'data' => [
+                'date' => $date,
+                'steps' => $row ? (int) ($row['steps'] ?? 0) : 0,
+                'weight' => $row && $row['weight'] !== null ? (float) $row['weight'] : 0,
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    protected function saveStepsAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $date = trim((string) ($in['date'] ?? date('Y-m-d')));
+        $steps = (int) ($in['steps'] ?? 0);
+        $hasWeight = array_key_exists('weight', $in);
+        $weight = $hasWeight ? (float) ($in['weight'] ?? 0) : null;
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return ['ok' => false, 'msg' => 'Fecha invalida'];
+        }
+        if ($steps < 0) {
+            return ['ok' => false, 'msg' => 'Pasos invalidos'];
+        }
+        if ($hasWeight && $weight !== null && $weight < 0) {
+            return ['ok' => false, 'msg' => 'Peso invalido'];
+        }
+
+        $existingId = $db->get('user_info_register', 'id', ['date' => $date]);
+        $saveData = ['steps' => $steps];
+        if ($hasWeight) {
+            $saveData['weight'] = $weight;
+        }
+
+        if ($existingId) {
+            $db->update('user_info_register', $saveData, ['id' => (int) $existingId]);
+        } else {
+            $insertData = [
+                'date' => $date,
+                'steps' => $steps,
+                'kcal_consumed' => 0,
+                'kcal_burned' => 0,
+            ];
+            if ($hasWeight) {
+                $insertData['weight'] = $weight;
+            }
+            $db->insert('user_info_register', $insertData);
+        }
+
+        $saved = $db->get('user_info_register', ['steps', 'weight'], ['date' => $date]);
+
+        return [
+            'ok' => true,
+            'data' => [
+                'date' => $date,
+                'steps' => (int) ($saved['steps'] ?? $steps),
+                'weight' => isset($saved['weight']) && $saved['weight'] !== null ? (float) $saved['weight'] : 0,
+            ],
+        ];
     }
 
     /** @return array<string, mixed> */

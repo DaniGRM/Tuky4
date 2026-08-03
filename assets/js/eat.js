@@ -10,6 +10,18 @@ let eatDashboard = {
 	date: '',
 	meals: { breakfast: [], lunch: [], dinner: [], snacks: [] },
 	totals: { breakfast: 0, lunch: 0, dinner: 0, snacks: 0, day_total: 0 },
+	energy: {
+		weight_kg: 0,
+		steps: 0,
+		profile: { sex: 'male', height_cm: 170, age: 30 },
+		consumed_kcal: 0,
+		tef_kcal: 0,
+		bmr_kcal: 0,
+		steps_kcal: 0,
+		workouts_kcal: 0,
+		burned_total_kcal: 0,
+		net_kcal: 0,
+	},
 };
 let selectedMealRationId = 0;
 let isAddingMealRation = false;
@@ -132,19 +144,52 @@ function renderDashboardSummary() {
 		if (el) el.textContent = `${mealTotal} kcal`;
 	});
 
-	// const list = document.getElementById('eat-summary-list');
-	// if (!list) return;
-	// list.innerHTML = '';
+	const energy = eatDashboard.energy || {};
+	const energyList = document.getElementById('eat-energy-list');
+	if (!energyList) return;
 
-	// Object.keys(EAT_MEALS).forEach(key => {
-	// 	const item = document.createElement('div');
-	// 	item.className = 'history-item';
-	// 	item.innerHTML = `
-	// 		<span class="hi-date">${EAT_MEALS[key].label}</span>
-	// 		<span class="hi-detail"><span class="badge-green badge">${eatDashboard.totals[key] || 0} kcal</span></span>
-	// 		<span class="hi-action"></span>`;
-	// 	list.appendChild(item);
-	// });
+	const consumed = parseInt(energy.consumed_kcal, 10) || 0;
+	const bmr = parseInt(energy.bmr_kcal, 10) || 0;
+	const steps = parseInt(energy.steps_kcal, 10) || 0;
+	const workouts = parseInt(energy.workouts_kcal, 10) || 0;
+	const tef = parseInt(energy.tef_kcal, 10) || 0;
+	const burned = parseInt(energy.burned_total_kcal, 10) || 0;
+	const net = parseInt(energy.net_kcal, 10) || 0;
+
+	const maxValue = Math.max(consumed, bmr, steps, workouts, tef, burned, 1);
+	const widthPct = (value) => Math.max(3, Math.min(100, Math.round((value / maxValue) * 100)));
+
+	const netClass = net <= 0 ? 'deficit' : 'surplus';
+	const netLabel = net <= 0 ? `Deficit ${Math.abs(net)} kcal` : `Superavit +${net} kcal`;
+
+	const metrics = [
+		{ cls: 'consumed', label: 'Ingeridas', value: consumed },
+		{ cls: 'bmr', label: 'BMR (Mifflin-St Jeor)', value: bmr },
+		{ cls: 'steps', label: 'Actividad por pasos', value: steps },
+		{ cls: 'workout', label: 'Entrenamientos', value: workouts },
+		{ cls: 'tef', label: 'TEF (10%)', value: tef },
+		{ cls: 'burned', label: 'Gasto total estimado', value: burned },
+	];
+
+	const metricHtml = metrics.map(metric => `
+		<div class="eat-energy-row ${metric.cls}">
+			<div class="eat-energy-row-head">
+				<span class="eat-energy-label">${metric.label}</span>
+				<span class="eat-energy-row-value">${metric.value} kcal</span>
+			</div>
+			<div class="eat-energy-bar"><span style="--bar-width:${widthPct(metric.value)}%"></span></div>
+		</div>
+	`).join('');
+
+	energyList.innerHTML = `
+		<div class="eat-energy-hero">
+			<div>
+				<div class="eat-energy-hero-title">Balance</div>
+			</div>
+			<span class="eat-energy-net ${netClass}">${net} kcal</span>
+		</div>
+		${metricHtml}
+	`;
 }
 
 function renderMealRationOptions() {
@@ -277,6 +322,18 @@ async function loadEatDashboard() {
 		date: data.date || todayYmd(),
 		meals: data.meals || { breakfast: [], lunch: [], dinner: [], snacks: [] },
 		totals: data.totals || { breakfast: 0, lunch: 0, dinner: 0, snacks: 0, day_total: 0 },
+		energy: data.energy || {
+			weight_kg: 0,
+			steps: 0,
+			profile: { sex: 'male', height_cm: 170, age: 30 },
+			consumed_kcal: 0,
+			tef_kcal: 0,
+			bmr_kcal: 0,
+			steps_kcal: 0,
+			workouts_kcal: 0,
+			burned_total_kcal: 0,
+			net_kcal: 0,
+		},
 	};
 
 	renderDashboardSummary();

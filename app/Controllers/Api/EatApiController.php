@@ -6,6 +6,10 @@ namespace App\Controllers\Api;
 final class EatApiController extends BaseApiController
 {
     private const MEAL_KEYS = ['breakfast', 'lunch', 'dinner', 'snacks'];
+    private const DEFAULT_SEX = 'male';
+    private const DEFAULT_HEIGHT_CM = 170.0;
+    private const DEFAULT_AGE = 30;
+    private const DEFAULT_WEIGHT_KG = 70.0;
 
     public function listDashboard(): void
     {
@@ -155,14 +159,212 @@ final class EatApiController extends BaseApiController
             self::MEAL_KEYS
         ));
 
+        $dailyContext = $this->resolveDailyContext($db, $date);
+        $consumedKcal = (int) $totals['day_total'];
+        $bmrKcal = (int) round($this->computeBmrMifflinStJeor(
+            $dailyContext['weight_kg'],
+            $dailyContext['height_cm'],
+            $dailyContext['age'],
+            $dailyContext['sex']
+        ));
+        $stepsKcal = (int) round($this->computeStepsCalories(
+            $dailyContext['steps'],
+            $dailyContext['weight_kg']
+        ));
+        $workoutsKcal = (int) round($this->computeWorkoutCalories($db, $date, $dailyContext['weight_kg']));
+        $tefKcal = (int) round($consumedKcal * 0.10);
+        $burnedTotalKcal = $bmrKcal + $stepsKcal + $workoutsKcal + $tefKcal;
+        $netKcal = $consumedKcal - $burnedTotalKcal;
+
         return [
             'ok' => true,
             'data' => [
                 'date' => $date,
                 'meals' => $meals,
                 'totals' => $totals,
+                'energy' => [
+                    'weight_kg' => $dailyContext['weight_kg'],
+                    'steps' => $dailyContext['steps'],
+                    'profile' => [
+                        'sex' => $dailyContext['sex'],
+                        'height_cm' => $dailyContext['height_cm'],
+                        'age' => $dailyContext['age'],
+                    ],
+                    'consumed_kcal' => $consumedKcal,
+                    'tef_kcal' => $tefKcal,
+                    'bmr_kcal' => $bmrKcal,
+                    'steps_kcal' => $stepsKcal,
+                    'workouts_kcal' => $workoutsKcal,
+                    'burned_total_kcal' => $burnedTotalKcal,
+                    'net_kcal' => $netKcal,
+                ],
             ],
         ];
+    }
+
+    /**
+     * @return array{weight_kg: float, steps: int, sex: string, height_cm: float, age: int}
+     */
+    private function resolveDailyContext($db, string $date): array
+    {
+        $steps = 0;
+        $weight = 0.0;
+
+        $dayRow = $db->get('user_info_register', ['steps', 'weight'], ['date' => $date]);
+        if ($dayRow) {
+            $steps = (int) ($dayRow['steps'] ?? 0);
+            $weight = (float) ($dayRow['weight'] ?? 0);
+        }
+
+        if ($weight <= 0) {
+            $weightRows = $db->select('user_info_register', ['weight'], [
+                'weight[!]' => null,
+                'date[<=]' => $date,
+                'ORDER' => ['date' => 'DESC', 'id' => 'DESC'],
+                'LIMIT' => 1,
+            ]);
+            if ($weightRows && isset($weightRows[0]['weight'])) {
+                $weight = (float) $weightRows[0]['weight'];
+            }
+        }
+
+        if ($weight <= 0) {
+            $weight = self::DEFAULT_WEIGHT_KG;
+        }
+
+        $sex = self::DEFAULT_SEX;
+        $heightCm = self::DEFAULT_HEIGHT_CM;
+        $age = self::DEFAULT_AGE;
+
+        $profile = $db->get('user_info', ['sex', 'height_cm', 'age'], [
+            'ORDER' => ['id' => 'ASC'],
+        ]);
+        if ($profile) {
+            $profileSex = strtolower(trim((string) ($profile['sex'] ?? self::DEFAULT_SEX)));
+            if (in_array($profileSex, ['male', 'female'], true)) {
+                $sex = $profileSex;
+            }
+
+            $heightValue = (float) ($profile['height_cm'] ?? self::DEFAULT_HEIGHT_CM);
+            if ($heightValue > 0) {
+                $heightCm = $heightValue;
+            }
+
+            $ageValue = (int) ($profile['age'] ?? self::DEFAULT_AGE);
+            if ($ageValue > 0) {
+                $age = $ageValue;
+            }
+        }
+
+        return [
+            'weight_kg' => $weight,
+            'steps' => max(0, $steps),
+            'sex' => $sex,
+            'height_cm' => $heightCm,
+            'age' => $age,
+        ];
+    }
+
+    private function computeBmrMifflinStJeor(float $weightKg, float $heightCm, int $age, string $sex): float
+    {
+        $base = (10 * $weightKg) + (6.25 * $heightCm) - (5 * $age);
+        return $sex === 'female' ? $base - 161 : $base + 5;
+    }
+
+    private function computeStepsCalories(int $steps, float $weightKg): float
+    {
+        // Aproximacion: 0.0005 kcal por paso y kg corporal.
+        return max(0, $steps) * max(0.0, $weightKg) * 0.0005;
+    }
+
+    private function computeWorkoutCalories($db, string $date, float $weightKg): float
+    {
+        $weight = max(1.0, $weightKg);
+        $total = 0.0;
+
+        $strengthRows = $db->select('records', ['series', 'rep_pattern'], [
+            'date' => $date,
+        ]);
+        foreach ($strengthRows as $row) {
+            $series = max(1, (int) ($row['series'] ?? 1));
+            $reps = $this->sumReps((string) ($row['rep_pattern'] ?? ''));
+            $estimatedMinutes = max(8, (int) round(($series * 2.5) + ($reps * 0.08)));
+            $total += $this->caloriesFromMet(6.0, $weight, $estimatedMinutes);
+        }
+
+        $activityRows = $db->select('activities_records', ['activity_id', 'avg_speed', 'duration'], [
+            'date' => $date,
+        ]);
+
+        if ($activityRows) {
+            $activityIds = array_values(array_unique(array_map(
+                static fn (array $row): int => (int) ($row['activity_id'] ?? 0),
+                $activityRows
+            )));
+
+            $typesByActivityId = [];
+            if ($activityIds) {
+                $activityTypes = $db->select('activities', ['id', 'type'], [
+                    'id' => $activityIds,
+                ]);
+                foreach ($activityTypes as $activityType) {
+                    $typesByActivityId[(int) $activityType['id']] = strtolower((string) $activityType['type']);
+                }
+            }
+
+            foreach ($activityRows as $row) {
+                $activityId = (int) ($row['activity_id'] ?? 0);
+                $type = $typesByActivityId[$activityId] ?? '';
+                $duration = max(1, (int) ($row['duration'] ?? 0));
+                $speed = max(0.0, (float) ($row['avg_speed'] ?? 0));
+
+                $met = $this->resolveMetForCardio($type, $speed);
+                if ($met <= 0) {
+                    continue;
+                }
+                $total += $this->caloriesFromMet($met, $weight, $duration);
+            }
+        }
+
+        return $total;
+    }
+
+    private function caloriesFromMet(float $met, float $weightKg, int $minutes): float
+    {
+        return ($met * 3.5 * $weightKg / 200) * max(1, $minutes);
+    }
+
+    private function resolveMetForCardio(string $type, float $speedKmh): float
+    {
+        $speed = max(0.0, $speedKmh);
+
+        if ($type === 'bike') {
+            if ($speed < 16.0) return 4.0;
+            if ($speed < 19.0) return 6.8;
+            if ($speed < 22.5) return 8.0;
+            if ($speed < 25.7) return 10.0;
+            return 12.0;
+        }
+
+        if ($type === 'running') {
+            if ($speed < 8.0) return 8.3;
+            if ($speed < 9.7) return 9.8;
+            if ($speed < 11.3) return 11.0;
+            if ($speed < 12.9) return 11.8;
+            return 12.8;
+        }
+
+        return 0.0;
+    }
+
+    private function sumReps(string $pattern): int
+    {
+        $parts = array_filter(array_map('trim', explode('-', $pattern)), static fn (string $p): bool => $p !== '');
+        $sum = 0;
+        foreach ($parts as $part) {
+            $sum += max(0, (int) $part);
+        }
+        return $sum;
     }
 
     /** @return array<string, mixed> */
