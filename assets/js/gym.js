@@ -30,6 +30,13 @@ let bikePreviousVolume = null;
 let runningPreviousVolume = null;
 let bikeDurationManual = false;
 let runningDurationManual = false;
+let currentSteps = 0;
+let currentDailyWeight = 0;
+let stepsLoaded = false;
+let userInfoLoaded = false;
+let dailySaveInFlight = false;
+let queuedDailyPayload = null;
+let userInfoSaveInFlight = false;
 
 function setSection(section) {
   document.querySelectorAll('.section-switch .pill').forEach(p =>
@@ -38,12 +45,192 @@ function setSection(section) {
   document.getElementById('gym-section').style.display = section === 'GYM' ? '' : 'none';
   document.getElementById('bike-section').style.display = section === 'BIKE' ? '' : 'none';
   document.getElementById('running-section').style.display = section === 'RUNNING' ? '' : 'none';
+  document.getElementById('steps-section').style.display = section === 'STEPS' ? '' : 'none';
 
   if (section === 'BIKE' && !bikeLoaded) {
     loadBikeActivities();
   }
   if (section === 'RUNNING' && !runningLoaded) {
     loadRunningActivities();
+  }
+  if (section === 'STEPS' && !stepsLoaded) {
+    loadSteps();
+  }
+  if (section === 'STEPS' && !userInfoLoaded) {
+    loadUserInfo();
+  }
+}
+
+function todayIsoDate() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function renderStepsValue() {
+  const display = document.getElementById('steps-display');
+  if (!display) return;
+  display.textContent = String(Math.max(0, parseInt(currentSteps, 10) || 0));
+}
+
+function renderDailyWeightValue() {
+  const display = document.getElementById('daily-weight-display');
+  if (!display) return;
+  const weight = Math.max(0, Number(currentDailyWeight || 0));
+  display.textContent = weight.toFixed(1);
+}
+
+function changeSteps(delta) {
+  const step = parseInt(delta, 10) || 0;
+  currentSteps = Math.max(0, (parseInt(currentSteps, 10) || 0) + step);
+  renderStepsValue();
+  saveDailyRegisterImmediate();
+}
+
+function changeDailyWeight(delta) {
+  const step = Number(delta) || 0;
+  const next = Math.round((Math.max(0, Number(currentDailyWeight || 0)) + step) * 10) / 10;
+  currentDailyWeight = Math.max(0, next);
+  renderDailyWeightValue();
+  saveDailyRegisterImmediate();
+}
+
+async function loadSteps() {
+  const res = await api('/api/gym/steps/get', { date: todayIsoDate() });
+  if (!res.ok) {
+    toast(res.msg || 'Error cargando pasos');
+    return;
+  }
+
+  currentSteps = Math.max(0, parseInt(res.data?.steps, 10) || 0);
+  currentDailyWeight = Math.max(0, Number(res.data?.weight || 0));
+  stepsLoaded = true;
+  renderStepsValue();
+  renderDailyWeightValue();
+}
+
+function renderUserInfoForm(data) {
+  const sexEl = document.getElementById('ui-sex');
+  const ageEl = document.getElementById('ui-age');
+  const heightEl = document.getElementById('ui-height-cm');
+  const stepsGoalEl = document.getElementById('ui-steps-goal');
+  const deficitEl = document.getElementById('ui-deficit-goal');
+  if (!sexEl || !ageEl || !heightEl || !stepsGoalEl || !deficitEl) return;
+
+  sexEl.value = (data.sex === 'female' ? 'female' : 'male');
+  ageEl.value = String(parseInt(data.age, 10) || 30);
+  heightEl.value = String(Number(data.height_cm || 170));
+  stepsGoalEl.value = String(Math.max(0, parseInt(data.daily_steps_goal, 10) || 0));
+  deficitEl.value = String(parseInt(data.calorie_deficit_goal, 10) || 0);
+}
+
+async function loadUserInfo() {
+  const res = await api('/api/gym/user-info/get');
+  if (!res.ok) {
+    toast(res.msg || 'Error cargando perfil');
+    return;
+  }
+
+  renderUserInfoForm(res.data || {});
+  userInfoLoaded = true;
+}
+
+async function saveUserInfo() {
+  if (userInfoSaveInFlight) return;
+
+  const sex = (document.getElementById('ui-sex')?.value || 'male').trim();
+  const age = parseInt(document.getElementById('ui-age')?.value || '0', 10) || 0;
+  const height_cm = Number(document.getElementById('ui-height-cm')?.value || 0);
+  const daily_steps_goal = Math.max(0, parseInt(document.getElementById('ui-steps-goal')?.value || '0', 10) || 0);
+  const calorie_deficit_goal = parseInt(document.getElementById('ui-deficit-goal')?.value || '0', 10) || 0;
+
+  if (!['male', 'female'].includes(sex)) {
+    toast('Sexo invalido');
+    return;
+  }
+  if (age <= 0 || age > 120) {
+    toast('Edad invalida');
+    return;
+  }
+  if (height_cm <= 0 || height_cm > 260) {
+    toast('Altura invalida');
+    return;
+  }
+
+  userInfoSaveInFlight = true;
+  const res = await api('/api/gym/user-info/save', {
+    sex,
+    age,
+    height_cm,
+    daily_steps_goal,
+    calorie_deficit_goal,
+  });
+  userInfoSaveInFlight = false;
+
+  if (!res.ok) {
+    toast(res.msg || 'Error guardando perfil');
+    return;
+  }
+
+  renderUserInfoForm(res.data || {
+    sex,
+    age,
+    height_cm,
+    daily_steps_goal,
+    calorie_deficit_goal,
+  });
+  toast('Perfil guardado ✓');
+}
+
+async function saveSteps() {
+  const steps = Math.max(0, parseInt(currentSteps, 10) || 0);
+  const weight = Math.max(0, Math.round(Number(currentDailyWeight || 0) * 10) / 10);
+  const res = await api('/api/gym/steps/save', {
+    date: todayIsoDate(),
+    steps,
+    weight,
+  });
+
+  if (!res.ok) {
+    toast(res.msg || 'Error guardando pasos');
+    return;
+  }
+
+  currentSteps = Math.max(0, parseInt(res.data?.steps, 10) || 0);
+  currentDailyWeight = Math.max(0, Number(res.data?.weight || 0));
+  renderStepsValue();
+  renderDailyWeightValue();
+}
+
+async function saveDailyRegisterImmediate() {
+  const payload = {
+    steps: Math.max(0, parseInt(currentSteps, 10) || 0),
+    weight: Math.max(0, Math.round(Number(currentDailyWeight || 0) * 10) / 10),
+  };
+  queuedDailyPayload = payload;
+
+  if (dailySaveInFlight) return;
+
+  while (queuedDailyPayload !== null) {
+    const target = queuedDailyPayload;
+    queuedDailyPayload = null;
+    dailySaveInFlight = true;
+
+    const res = await api('/api/gym/steps/save', {
+      date: todayIsoDate(),
+      steps: target.steps,
+      weight: target.weight,
+    });
+
+    dailySaveInFlight = false;
+
+    if (!res.ok) {
+      toast(res.msg || 'Error guardando pasos');
+      return;
+    }
+
+    currentSteps = Math.max(0, parseInt(res.data?.steps, 10) || 0);
+    currentDailyWeight = Math.max(0, Number(res.data?.weight || 0));
+    renderStepsValue();
+    renderDailyWeightValue();
   }
 }
 

@@ -37,6 +37,9 @@
             <button class="pill" data-val="RUNNING" aria-label="Running" title="Running" onclick="setSection('RUNNING')">
                 <i class="fa-solid fa-person-running" aria-hidden="true"></i>
             </button>
+            <button class="pill" data-val="STEPS" aria-label="Pasos" title="Pasos" onclick="setSection('STEPS')">
+                <i class="fa-solid fa-shoe-prints" aria-hidden="true"></i>
+            </button>
         </div>
         <div id="gym-section">
             <?php require __DIR__ . '/gym.tpl.php'; ?>
@@ -46,6 +49,9 @@
         </div>
         <div id="running-section" style="display:none">
             <?php require __DIR__ . '/running.tpl.php'; ?>
+        </div>
+        <div id="steps-section" style="display:none">
+            <?php require __DIR__ . '/steps.tpl.php'; ?>
         </div>
     </main>
 

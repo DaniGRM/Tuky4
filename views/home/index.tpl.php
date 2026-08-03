@@ -159,6 +159,12 @@
       <div class="app-desc">Seguimiento de ejercicios, pesos y repeticiones con graficas de progreso.</div>
       <span class="app-badge badge-live">● Activa</span>
     </a>
+    <a class="app-card" href="/eat">
+      <div class="app-icon icon-diet"><img src="Tuky4Eat.png" alt="Tuky4Eat" width="40" height="40"></div>
+      <div class="app-name">Tuky4Eat</div>
+      <div class="app-desc">Control de alimentacion y calorias diarias.</div>
+      <span class="app-badge badge-live">● Activa</span>
+    </a>
 
   </div>
 
