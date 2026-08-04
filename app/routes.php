@@ -35,6 +35,7 @@ $router->post('/api/gym/steps/get', [GymApiController::class, 'getSteps']);
 $router->post('/api/gym/steps/save', [GymApiController::class, 'saveSteps']);
 $router->post('/api/gym/user-info/get', [GymApiController::class, 'getUserInfo']);
 $router->post('/api/gym/user-info/save', [GymApiController::class, 'saveUserInfo']);
+$router->post('/api/gym/training-days', [GymApiController::class, 'getTrainingDays']);
 
 
 $router->get('/eat', [EatController::class, 'index']);

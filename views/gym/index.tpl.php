@@ -57,6 +57,8 @@
 
     <div id="toast"></div>
 
+    <?php require __DIR__ . '/../partials/mobile_nav.tpl.php'; ?>
+
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
     <script src="assets/js/app.js"></script>

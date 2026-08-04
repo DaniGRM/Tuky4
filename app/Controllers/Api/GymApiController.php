@@ -25,6 +25,11 @@ final class GymApiController extends BaseApiController
         $this->run('saveStepsAction');
     }
 
+    public function getTrainingDays(): void
+    {
+        $this->run('getTrainingDaysAction');
+    }
+
     public function listActivities(): void
     {
         $this->run('listActivitiesAction');
@@ -226,6 +231,65 @@ final class GymApiController extends BaseApiController
                 'steps' => (int) ($saved['steps'] ?? $steps),
                 'weight' => isset($saved['weight']) && $saved['weight'] !== null ? (float) $saved['weight'] : 0,
             ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    protected function getTrainingDaysAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $endDate = trim((string) ($in['end_date'] ?? date('Y-m-d')));
+        $startDate = trim((string) ($in['start_date'] ?? date('Y-m-d', strtotime($endDate . ' -6 days'))));
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+            return ['ok' => false, 'msg' => 'Rango de fechas invalido'];
+        }
+        if ($startDate > $endDate) {
+            return ['ok' => false, 'msg' => 'El inicio debe ser anterior o igual al fin'];
+        }
+
+        $rows = [];
+        $cursor = strtotime($startDate);
+        $end = strtotime($endDate);
+        while ($cursor !== false && $cursor <= $end) {
+            $date = date('Y-m-d', $cursor);
+            $rows[$date] = [
+                'date' => $date,
+                'gym' => false,
+                'activity' => false,
+            ];
+            $cursor = strtotime('+1 day', $cursor);
+        }
+
+        $strengthDates = $db->select('records', ['date'], [
+            'date[>=]' => $startDate,
+            'date[<=]' => $endDate,
+            'GROUP' => 'date',
+        ]);
+        foreach ($strengthDates as $row) {
+            $date = (string) ($row['date'] ?? '');
+            if (isset($rows[$date])) {
+                $rows[$date]['gym'] = true;
+            }
+        }
+
+        $activityDates = $db->select('activities_records', ['date'], [
+            'date[>=]' => $startDate,
+            'date[<=]' => $endDate,
+            'GROUP' => 'date',
+        ]);
+        foreach ($activityDates as $row) {
+            $date = (string) ($row['date'] ?? '');
+            if (isset($rows[$date])) {
+                $rows[$date]['activity'] = true;
+            }
+        }
+
+        return [
+            'ok' => true,
+            'data' => array_values($rows),
         ];
     }
 

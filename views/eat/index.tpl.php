@@ -42,6 +42,8 @@
 
     <div id="toast"></div>
 
+    <?php require __DIR__ . '/../partials/mobile_nav.tpl.php'; ?>
+
     <div class="overlay" id="modal-portion" onclick="closeOnBg(event,'modal-portion')">
         <div class="modal">
             <h2 id="portion-modal-title">Nueva racion</h2>
