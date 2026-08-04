@@ -78,13 +78,6 @@ function renderDailyWeightValue() {
   display.textContent = weight.toFixed(1);
 }
 
-function changeSteps(delta) {
-  const step = parseInt(delta, 10) || 0;
-  currentSteps = Math.max(0, (parseInt(currentSteps, 10) || 0) + step);
-  renderStepsValue();
-  saveDailyRegisterImmediate();
-}
-
 function changeDailyWeight(delta) {
   const step = Number(delta) || 0;
   const next = Math.round((Math.max(0, Number(currentDailyWeight || 0)) + step) * 10) / 10;

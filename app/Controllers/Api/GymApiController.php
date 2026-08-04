@@ -170,12 +170,28 @@ final class GymApiController extends BaseApiController
         }
 
         $row = $db->get('user_info_register', ['id', 'steps', 'weight'], ['date' => $date]);
+        $steps = $row ? (int) ($row['steps'] ?? 0) : 0;
+        $weight = $row && $row['weight'] !== null ? (float) $row['weight'] : 0.0;
+
+        if ($weight <= 0) {
+            $lastWeightRow = $db->get('user_info_register', ['weight'], [
+                'weight[!]' => null,
+                'weight[>]' => 0,
+                'date[<=]' => $date,
+                'ORDER' => ['date' => 'DESC', 'id' => 'DESC'],
+            ]);
+
+            if ($lastWeightRow && isset($lastWeightRow['weight'])) {
+                $weight = (float) $lastWeightRow['weight'];
+            }
+        }
+
         return [
             'ok' => true,
             'data' => [
                 'date' => $date,
-                'steps' => $row ? (int) ($row['steps'] ?? 0) : 0,
-                'weight' => $row && $row['weight'] !== null ? (float) $row['weight'] : 0,
+                'steps' => $steps,
+                'weight' => max(0.0, $weight),
             ],
         ];
     }
