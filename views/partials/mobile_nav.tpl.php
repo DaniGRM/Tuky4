@@ -12,8 +12,8 @@ $isEat = str_starts_with($uri, '/eat');
   bottom: calc(.55rem + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   width: min(520px, calc(100% - 1rem));
-  background: rgba(26, 29, 39, 0.92);
-  border: 1px solid rgba(46, 51, 72, 0.95);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 94%, transparent);
   border-radius: 18px;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
@@ -30,7 +30,7 @@ $isEat = str_starts_with($uri, '/eat');
 
 .mobile-nav-link {
   text-decoration: none;
-  color: #8892a4;
+  color: var(--muted);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -42,8 +42,8 @@ $isEat = str_starts_with($uri, '/eat');
 }
 
 .mobile-nav-link:hover {
-  color: #e2e8f0;
-  background: rgba(108, 99, 255, 0.16);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .mobile-nav-link:active {
@@ -51,8 +51,9 @@ $isEat = str_starts_with($uri, '/eat');
 }
 
 .mobile-nav-link.active {
-  color: #e2e8f0;
-  background: linear-gradient(140deg, rgba(108, 99, 255, 0.35), rgba(255, 101, 132, 0.24));
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--border));
 }
 
 .mobile-nav-link svg {
@@ -86,7 +87,7 @@ $isEat = str_starts_with($uri, '/eat');
           <path d="M3 10.8L12 3l9 7.8"/>
           <path d="M5.5 9.8V21h13V9.8"/>
         </svg>
-        <span class="mobile-nav-label">Home</span>
+        <span class="mobile-nav-label">Tuky4</span>
       </a>
     </li>
     <li>
@@ -100,7 +101,7 @@ $isEat = str_starts_with($uri, '/eat');
           <path d="M15 8v8"/>
           <path d="M6 12h12"/>
         </svg>
-        <span class="mobile-nav-label">Gym</span>
+        <span class="mobile-nav-label">Tuky4Gym</span>
       </a>
     </li>
     <li>
@@ -113,7 +114,7 @@ $isEat = str_starts_with($uri, '/eat');
           <path d="M14 3c2.8 0 4.5 2.4 4.5 5.4V21"/>
           <path d="M14 13h4.5"/>
         </svg>
-        <span class="mobile-nav-label">Eat</span>
+        <span class="mobile-nav-label">Tuky4Eat</span>
       </a>
     </li>
   </ul>
