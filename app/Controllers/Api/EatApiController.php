@@ -36,6 +36,11 @@ final class EatApiController extends BaseApiController
         $this->run('listPortionsAction');
     }
 
+    public function listTags(): void
+    {
+        $this->run('listTagsAction');
+    }
+
     public function addPortion(): void
     {
         $this->run('addPortionAction');
@@ -438,6 +443,17 @@ final class EatApiController extends BaseApiController
     }
 
     /** @return array<string, mixed> */
+    protected function listTagsAction(): array
+    {
+        $db = $this->medoo();
+        $rows = $db->select('eat_tags', ['id', 'name'], [
+            'ORDER' => ['name' => 'ASC', 'id' => 'ASC'],
+        ]);
+
+        return ['ok' => true, 'data' => $rows ?: []];
+    }
+
+    /** @return array<string, mixed> */
     protected function listPortionsAction(): array
     {
         $db = $this->medoo();
@@ -450,6 +466,7 @@ final class EatApiController extends BaseApiController
             'created_at',
             'updated_at',
             'unit_id',
+            'tag_id',
         ], [
             'ORDER' => ['created_at' => 'DESC', 'id' => 'DESC'],
         ]);
@@ -475,8 +492,21 @@ final class EatApiController extends BaseApiController
         }
 
         $mapped = [];
+        $tagIds = array_values(array_unique(array_filter(array_map(
+            static fn (array $row): int => (int) ($row['tag_id'] ?? 0),
+            $rows
+        ))));
+        $tagsById = [];
+        if ($tagIds) {
+            $tagRows = $db->select('eat_tags', ['id', 'name'], ['id' => $tagIds]);
+            foreach ($tagRows as $tagRow) {
+                $tagsById[(int) $tagRow['id']] = (string) $tagRow['name'];
+            }
+        }
+
         foreach ($rows as $row) {
             $uid = (int) $row['unit_id'];
+            $tagId = $row['tag_id'] !== null ? (int) $row['tag_id'] : null;
             $mapped[] = [
                 'id' => (int) $row['id'],
                 'name' => (string) $row['name'],
@@ -487,6 +517,8 @@ final class EatApiController extends BaseApiController
                 'unit_id' => $uid,
                 'unit_name' => $units[$uid]['name'] ?? '',
                 'unit_icon' => $units[$uid]['icon'] ?? '',
+                'tag_id' => $tagId,
+                'tag_name' => $tagId !== null ? ($tagsById[$tagId] ?? '') : '',
             ];
         }
 
@@ -503,6 +535,7 @@ final class EatApiController extends BaseApiController
         $amount = (float) ($in['amount'] ?? 0);
         $unitId = (int) ($in['unit_id'] ?? 0);
         $calories = (int) ($in['calories'] ?? 0);
+        $tagName = trim((string) ($in['tag_name'] ?? ''));
 
         if ($name === '') {
             return ['ok' => false, 'msg' => 'Nombre vacio'];
@@ -515,10 +548,13 @@ final class EatApiController extends BaseApiController
             return ['ok' => false, 'msg' => 'Unidad invalida'];
         }
 
+        $tagId = $this->resolveTagId($db, $tagName);
+
         $db->insert('eat_portions', [
             'name' => $name,
             'amount' => $amount,
             'unit_id' => $unitId,
+            'tag_id' => $tagId,
             'calories' => $calories,
         ]);
 
@@ -528,6 +564,8 @@ final class EatApiController extends BaseApiController
             'name' => $name,
             'amount' => $amount,
             'unit_id' => $unitId,
+            'tag_id' => $tagId,
+            'tag_name' => $tagName,
             'calories' => $calories,
         ];
     }
@@ -543,6 +581,7 @@ final class EatApiController extends BaseApiController
         $amount = (float) ($in['amount'] ?? 0);
         $unitId = (int) ($in['unit_id'] ?? 0);
         $calories = (int) ($in['calories'] ?? 0);
+        $tagName = trim((string) ($in['tag_name'] ?? ''));
 
         if ($id <= 0) {
             return ['ok' => false, 'msg' => 'Racion invalida'];
@@ -560,10 +599,13 @@ final class EatApiController extends BaseApiController
             return ['ok' => false, 'msg' => 'Unidad invalida'];
         }
 
+        $tagId = $this->resolveTagId($db, $tagName);
+
         $db->update('eat_portions', [
             'name' => $name,
             'amount' => $amount,
             'unit_id' => $unitId,
+            'tag_id' => $tagId,
             'calories' => $calories,
         ], [
             'id' => $id,
@@ -585,5 +627,21 @@ final class EatApiController extends BaseApiController
 
         $db->delete('eat_portions', ['id' => $id]);
         return ['ok' => true];
+    }
+
+    private function resolveTagId($db, string $tagName): ?int
+    {
+        $name = trim($tagName);
+        if ($name === '') {
+            return null;
+        }
+
+        $existingId = $db->get('eat_tags', 'id', ['name' => $name]);
+        if ($existingId) {
+            return (int) $existingId;
+        }
+
+        $db->insert('eat_tags', ['name' => $name]);
+        return (int) $this->lastInsertId();
     }
 }

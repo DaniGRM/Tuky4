@@ -1,5 +1,6 @@
 let portions = [];
 let units = [];
+let tags = [];
 const EAT_MEALS = {
 	breakfast: { label: 'Desayuno' },
 	lunch: { label: 'Comida' },
@@ -25,6 +26,7 @@ let eatDashboard = {
 };
 let selectedMealRationId = 0;
 let isAddingMealRation = false;
+let selectedMealTagFilter = '';
 
 function setEatSection(section) {
 	document.querySelectorAll('.section-switch .pill').forEach(p =>
@@ -52,7 +54,7 @@ function todayYmd() {
 }
 
 function resetPortionForm() {
-	const ids = ['portion-id', 'portion-name', 'portion-amount', 'portion-calories'];
+	const ids = ['portion-id', 'portion-name', 'portion-amount', 'portion-calories', 'portion-tag'];
 	ids.forEach(id => {
 		const el = document.getElementById(id);
 		if (el) el.value = '';
@@ -69,6 +71,99 @@ function resetPortionForm() {
 	if (title) title.textContent = 'Nueva racion';
 	const saveBtn = document.getElementById('portion-save-btn');
 	if (saveBtn) saveBtn.textContent = 'Guardar';
+}
+
+function normalizeTagName(name) {
+	return String(name || '').trim().toLowerCase();
+}
+
+function setTagOptions(rawTags) {
+	const list = Array.isArray(rawTags) ? rawTags : [];
+	tags = list
+		.map(t => ({
+			id: parseInt(t.id, 10) || 0,
+			name: String(t.name || '').trim(),
+		}))
+		.filter(t => t.id > 0 && t.name !== '');
+
+	const datalist = document.getElementById('portion-tag-list');
+	if (datalist) {
+		datalist.innerHTML = '';
+		tags.forEach(tag => {
+			const opt = document.createElement('option');
+			opt.value = tag.name;
+			datalist.appendChild(opt);
+		});
+	}
+
+	renderMealTagFilterOptions();
+}
+
+function collectTagsFromPortions() {
+	const byName = new Map();
+	portions.forEach(p => {
+		const tagName = String(p.tag_name || '').trim();
+		const tagId = parseInt(p.tag_id, 10) || 0;
+		if (!tagName || tagId <= 0) return;
+		const key = normalizeTagName(tagName);
+		if (!byName.has(key)) {
+			byName.set(key, { id: tagId, name: tagName });
+		}
+	});
+	return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+function renderMealTagFilterOptions() {
+	const container = document.getElementById('eat-meal-tag-filter-badges');
+	if (!container) return;
+
+	const merged = (() => {
+		const mergedMap = new Map();
+		const addTag = (tag) => {
+			const name = String(tag?.name || '').trim();
+			const id = parseInt(tag?.id, 10) || 0;
+			if (!name || id <= 0) return;
+			const key = normalizeTagName(name);
+			if (!mergedMap.has(key)) mergedMap.set(key, { id, name });
+		};
+		tags.forEach(addTag);
+		collectTagsFromPortions().forEach(addTag);
+		return Array.from(mergedMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+	})();
+
+	const previous = selectedMealTagFilter;
+	container.innerHTML = '';
+
+	const createBadge = (idValue, label) => {
+		const btn = document.createElement('button');
+		btn.type = 'button';
+		btn.className = 'eat-tag-badge' + (String(selectedMealTagFilter) === String(idValue) ? ' active' : '');
+		btn.textContent = label;
+		btn.setAttribute('onclick', `onMealTagFilterChange('${String(idValue)}')`);
+		return btn;
+	};
+
+	container.appendChild(createBadge('', 'Todas'));
+	merged.forEach(tag => {
+		container.appendChild(createBadge(String(tag.id), tag.name));
+	});
+
+	if (previous && merged.some(t => String(t.id) === String(previous))) {
+		selectedMealTagFilter = String(previous);
+	} else {
+		selectedMealTagFilter = '';
+	}
+
+	Array.from(container.querySelectorAll('.eat-tag-badge')).forEach(btn => {
+		const active = btn.getAttribute('onclick') === `onMealTagFilterChange('${selectedMealTagFilter}')`;
+		btn.classList.toggle('active', active);
+	});
+}
+
+function onMealTagFilterChange(tagId = '') {
+	selectedMealTagFilter = String(tagId || '');
+	renderMealTagFilterOptions();
+	renderMealRationOptions();
 }
 
 function renderUnitOptions(selectedId = null) {
@@ -115,10 +210,13 @@ function renderPortions(data) {
 		card.className = 'card';
 		const unitIcon = p.unit_icon ? `<i class="${esc(p.unit_icon)}" aria-hidden="true"></i>` : '';
 		const unitName = p.unit_name || '';
+		const tagName = String(p.tag_name || '').trim();
+		const tagBadge = tagName ? `<span class="badge">#${esc(tagName)}</span>` : '';
 		card.innerHTML = `
 			<div class="card-name">${esc(p.name)}</div>
 			<div class="card-record">
 				<span class="badge">${unitIcon} ${formatAmount(p.amount)} ${esc(unitName)}</span>
+				${tagBadge}
 				<span class="badge-green badge">${parseInt(p.calories, 10)} kcal</span>
 			</div>
 			<div class="card-actions">
@@ -197,13 +295,16 @@ function renderMealRationOptions() {
 	if (!grid) return;
 
 	grid.innerHTML = '';
+	const filtered = selectedMealTagFilter
+		? portions.filter(p => String(parseInt(p.tag_id, 10) || 0) === String(selectedMealTagFilter))
+		: portions;
 
-	if (!portions.length) {
+	if (!filtered.length) {
 		grid.innerHTML = '<p class="eat-ration-empty">No hay raciones disponibles.</p>';
 		return;
 	}
 
-	portions.forEach(p => {
+	filtered.forEach(p => {
 		const pid = parseInt(p.id, 10);
 		const card = document.createElement('button');
 		card.type = 'button';
@@ -211,9 +312,12 @@ function renderMealRationOptions() {
 		card.setAttribute('onclick', `selectMealRation(${pid})`);
 		card.setAttribute('aria-label', `Seleccionar ${p.name}`);
 		const unitIcon = p.unit_icon ? `<i class="${esc(p.unit_icon)}" aria-hidden="true"></i>` : '';
+		const tagName = String(p.tag_name || '').trim();
+		const tagRow = tagName ? `<span class="eat-ration-tag">#${esc(tagName)}</span>` : '';
 		card.innerHTML = `
 			<span class="eat-ration-amount">${formatAmount(p.amount)} ${unitIcon}</span>
 			<span class="eat-ration-name">${esc(p.name)}</span>
+			${tagRow}
 			<span class="eat-ration-calories">${parseInt(p.calories, 10)} kcal</span>`;
 		if (isAddingMealRation) card.disabled = true;
 		grid.appendChild(card);
@@ -307,7 +411,17 @@ async function loadPortions() {
 	}
 	portions = Array.isArray(res.data) ? res.data : [];
 	renderPortions(portions);
+	renderMealTagFilterOptions();
 	renderMealRationOptions();
+}
+
+async function loadTags() {
+	const res = await api('/api/eat/tags/list');
+	if (!res.ok) {
+		setTagOptions(collectTagsFromPortions());
+		return;
+	}
+	setTagOptions(res.data || []);
 }
 
 async function loadEatDashboard() {
@@ -345,6 +459,7 @@ function openEatMealModal(mealKey) {
 	if (!EAT_MEALS[mealKey]) return;
 	document.getElementById('eat-meal-key').value = mealKey;
 	document.getElementById('eat-meal-modal-title').textContent = EAT_MEALS[mealKey].label;
+	renderMealTagFilterOptions();
 	renderMealRationOptions();
 	renderEatMealList(mealKey);
 	openModal('modal-eat-meal');
@@ -405,6 +520,7 @@ function editPortion(id) {
 	document.getElementById('portion-name').value = p.name;
 	document.getElementById('portion-amount').value = formatAmount(p.amount);
 	renderUnitOptions(p.unit_id);
+	document.getElementById('portion-tag').value = String(p.tag_name || '');
 	document.getElementById('portion-calories').value = parseInt(p.calories, 10);
 
 	const title = document.getElementById('portion-modal-title');
@@ -425,6 +541,7 @@ async function savePortion() {
 	const name = document.getElementById('portion-name').value.trim();
 	const amount = Number(document.getElementById('portion-amount').value || 0);
 	const unit_id = parseInt(document.getElementById('portion-unit-id').value, 10) || 0;
+	const tag_name = document.getElementById('portion-tag').value.trim();
 	const calories = parseInt(document.getElementById('portion-calories').value, 10) || 0;
 
 	if (!name || amount <= 0 || unit_id <= 0 || calories <= 0) {
@@ -433,7 +550,9 @@ async function savePortion() {
 	}
 
 	const path = id > 0 ? '/api/eat/portions/update' : '/api/eat/portions/add';
-	const body = id > 0 ? { id, name, amount, unit_id, calories } : { name, amount, unit_id, calories };
+	const body = id > 0
+		? { id, name, amount, unit_id, tag_name, calories }
+		: { name, amount, unit_id, tag_name, calories };
 	const res = await api(path, body);
 	if (!res.ok) {
 		toast(res.msg || 'Error guardando racion');
@@ -444,6 +563,7 @@ async function savePortion() {
 	resetPortionForm();
 	toast(id > 0 ? 'Racion actualizada' : 'Racion creada');
 	await loadPortions();
+	await loadTags();
 	await loadEatDashboard();
 }
 
@@ -457,6 +577,7 @@ async function deletePortion(id, name) {
 
 	toast('Racion eliminada');
 	await loadPortions();
+	await loadTags();
 	await loadEatDashboard();
 }
 
@@ -471,5 +592,5 @@ document.getElementById('modal-portion')?.addEventListener('click', e => {
 	if (e.target && e.target.id === 'modal-portion') return;
 });
 
-Promise.all([loadUnits(), loadPortions()]);
+Promise.all([loadUnits(), loadPortions(), loadTags()]);
 loadEatDashboard();

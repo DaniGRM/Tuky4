@@ -62,6 +62,11 @@
                 <select id="portion-unit-id"></select>
             </div>
             <div class="field">
+                <label>Tag (opcional)</label>
+                <input type="text" id="portion-tag" list="portion-tag-list" placeholder="ej. Proteina, Merienda, Pre-entreno" autocomplete="off">
+                <datalist id="portion-tag-list"></datalist>
+            </div>
+            <div class="field">
                 <label>Calorias (kcal)</label>
                 <input type="number" id="portion-calories" min="1" step="1" placeholder="ej. 75">
             </div>
@@ -80,6 +85,10 @@
 
             
             <div class="history-list" id="eat-meal-list"></div>
+            <div class="field" style="margin-top:1rem">
+                <label>Filtrar por tag</label>
+                <div class="eat-tag-filter-scroll" id="eat-meal-tag-filter-badges"></div>
+            </div>
             <div class="field" style="margin-top:1rem">
                 <label>Selecciona una racion</label>
                 <div class="eat-ration-grid" id="eat-meal-ration-grid"></div>
