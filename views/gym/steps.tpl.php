@@ -13,9 +13,7 @@
     </div>
 
     <div class="weight-ctrl">
-        <button onclick="changeSteps(-100)">-</button>
         <div class="weight-val" id="steps-display">0</div>
-        <button onclick="changeSteps(100)">+</button>
     </div>
 
     <hr style="margin:.25rem 0 .35rem">
