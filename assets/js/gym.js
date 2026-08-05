@@ -25,6 +25,8 @@ let bikeActivities = [];
 let bikeLoaded = false;
 let runningActivities = [];
 let runningLoaded = false;
+let sports = [];
+let sportsLoaded = false;
 let gymPreviousVolume = null;
 let bikePreviousVolume = null;
 let runningPreviousVolume = null;
@@ -45,6 +47,7 @@ function setSection(section) {
   document.getElementById('gym-section').style.display = section === 'GYM' ? '' : 'none';
   document.getElementById('bike-section').style.display = section === 'BIKE' ? '' : 'none';
   document.getElementById('running-section').style.display = section === 'RUNNING' ? '' : 'none';
+  document.getElementById('sports-section').style.display = section === 'SPORTS' ? '' : 'none';
   document.getElementById('steps-section').style.display = section === 'STEPS' ? '' : 'none';
 
   if (section === 'BIKE' && !bikeLoaded) {
@@ -52,6 +55,9 @@ function setSection(section) {
   }
   if (section === 'RUNNING' && !runningLoaded) {
     loadRunningActivities();
+  }
+  if (section === 'SPORTS' && !sportsLoaded) {
+    loadSports();
   }
   if (section === 'STEPS' && !stepsLoaded) {
     loadSteps();
@@ -400,7 +406,7 @@ function initDatePickers() {
     defaultDate: 'today',
   };
 
-  ['#rec-date', '#bike-date', '#running-date'].forEach(selector => {
+  ['#rec-date', '#bike-date', '#running-date', '#sport-date'].forEach(selector => {
     const el = document.querySelector(selector);
     if (!el) return;
     if (el._flatpickr) return;
@@ -1130,6 +1136,207 @@ async function deleteRunningRecord(recordId) {
   }
 }
 
+async function loadSports() {
+  const res = await api('/api/gym/sports/list');
+  if (!res.ok) {
+    toast(res.msg || 'Error cargando deportes');
+    return;
+  }
+
+  const base = Array.isArray(res.data) ? res.data : [];
+  const withLatest = await Promise.all(base.map(async sport => {
+    const historyRes = await api('/api/gym/sports-register/history', { sport_id: sport.id });
+    const latest = historyRes.ok && historyRes.data && historyRes.data.length ? historyRes.data[0] : null;
+    return { ...sport, latestRecord: latest };
+  }));
+
+  sports = withLatest;
+  sportsLoaded = true;
+  renderSports(withLatest);
+}
+
+function renderSports(data) {
+  const grid = document.getElementById('sports-grid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+  if (!data.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.id = 'sports-empty-state';
+    empty.style.gridColumn = '1/-1';
+    empty.innerHTML = '<p>Aun no hay deportes registrados.</p>';
+    grid.appendChild(empty);
+    return;
+  }
+
+  data.forEach(sport => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const r = sport.latestRecord;
+    const icon = esc(sport.icon || 'fa-solid fa-trophy');
+
+    card.innerHTML = `
+      <div class="card-name" style="display:flex;align-items:center;gap:.5rem">
+        <i class="${icon}" aria-hidden="true"></i>
+        <span>${esc(sport.name)}</span>
+      </div>
+      ${r ? `
+        <div class="card-record">
+          <span class="badge-green badge">${formatDuration(r.duration)}</span>
+        </div>
+        <div class="card-date">${formatDate(r.date)}</div>
+      ` : '<div class="card-empty">Sin registros aun</div>'}
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="openSportRegisterModal(${sport.id},'${esc(sport.name)}')">+ Registro</button>
+        <button class="btn btn-ghost btn-sm" onclick="openSportHistory(${sport.id},'${esc(sport.name)}')">Historial</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Eliminar" onclick="deleteSport(${sport.id},'${esc(sport.name)}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function findSportById(sportId) {
+  const id = parseInt(sportId, 10) || 0;
+  return sports.find(s => parseInt(s.id, 10) === id) || null;
+}
+
+function openSportRegisterModal(sportId, name) {
+  const sport = findSportById(sportId);
+  const last = sport?.latestRecord || null;
+
+  document.getElementById('sport-id').value = sportId;
+  document.getElementById('sport-register-title').textContent = name;
+  document.getElementById('sport-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('sport-duration').value = last ? String(parseInt(last.duration, 10) || 0) : '';
+
+  openModal('modal-sport-register');
+}
+
+async function addSport() {
+  const nameEl = document.getElementById('sport-name');
+  const iconEl = document.getElementById('sport-icon');
+  const name = (nameEl?.value || '').trim();
+  const icon = (iconEl?.value || 'fa-solid fa-futbol').trim();
+
+  if (!name) {
+    toast('Escribe un nombre');
+    return;
+  }
+
+  const res = await api('/api/gym/sports/add', { name, icon });
+  if (!res.ok) {
+    toast(res.msg || 'Error');
+    return;
+  }
+
+  sports = [
+    {
+      id: parseInt(res.id, 10) || Date.now(),
+      name,
+      icon,
+      created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      latestRecord: null,
+    },
+    ...sports,
+  ];
+  renderSports(sports);
+
+  nameEl.value = '';
+  if (iconEl) {
+    iconEl.value = 'fa-solid fa-volleyball';
+  }
+  closeModal('modal-sport');
+  toast('Deporte anadido');
+  await loadSports();
+}
+
+async function addSportRegister() {
+  const sport_id = parseInt(document.getElementById('sport-id').value, 10) || 0;
+  const date = document.getElementById('sport-date').value;
+  const duration = parseInt(document.getElementById('sport-duration').value, 10) || 0;
+
+  if (!sport_id || duration <= 0) {
+    toast('Rellena deporte y duracion');
+    return;
+  }
+
+  const res = await api('/api/gym/sports-register/add', {
+    sport_id,
+    date,
+    duration,
+  });
+
+  if (!res.ok) {
+    toast(res.msg || 'Error');
+    return;
+  }
+
+  closeModal('modal-sport-register');
+  toast('Registro guardado ✓');
+  await loadSports();
+}
+
+async function openSportHistory(sportId, name) {
+  document.getElementById('sport-history-title').textContent = name;
+  const list = document.getElementById('sport-history-list');
+  list.innerHTML = '';
+
+  const res = await api('/api/gym/sports-register/history', { sport_id: sportId });
+  if (!res.ok || !res.data.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:.9rem">Sin registros aun.</p>';
+    openModal('modal-sport-history');
+    return;
+  }
+
+  res.data.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <span class="hi-date">${formatDate(r.date)}</span>
+      <span class="hi-detail">
+        <span class="badge-green badge">${formatDuration(r.duration)}</span>
+      </span>
+      <span class="hi-action">
+        <button class="btn btn-ghost btn-sm btn-icon" title="Eliminar" onclick="deleteSportRegister(${r.id})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.5">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </span>`;
+    list.appendChild(div);
+  });
+
+  openModal('modal-sport-history');
+}
+
+async function deleteSport(sportId, name) {
+  if (!confirm(`¿Eliminar "${name}" y todos sus registros?`)) return;
+  const res = await api('/api/gym/sports/delete', { sport_id: sportId });
+  if (res.ok) {
+    sports = sports.filter(s => parseInt(s.id, 10) !== parseInt(sportId, 10));
+    renderSports(sports);
+    toast('Deporte eliminado');
+    await loadSports();
+  }
+}
+
+async function deleteSportRegister(recordId) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  const res = await api('/api/gym/sports-register/delete', { record_id: recordId });
+  if (res.ok) {
+    toast('Registro eliminado');
+    closeModal('modal-sport-history');
+    await loadSports();
+  }
+}
+
 // ── Filtro por rutina ─────────────────────────────────────────────────────────
 function setFilter(f) {
   activeFilter = f;
@@ -1562,6 +1769,13 @@ const runningNameInput = document.getElementById('running-activity-name');
 if (runningNameInput) {
   runningNameInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') addRunningActivity();
+  });
+}
+
+const sportNameInput = document.getElementById('sport-name');
+if (sportNameInput) {
+  sportNameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') addSport();
   });
 }
 

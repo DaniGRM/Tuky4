@@ -29,7 +29,7 @@
   .home-hero p { color: var(--muted); font-size: .86rem; }
   .home-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: .8rem;
     margin-bottom: 1rem;
   }
@@ -159,7 +159,7 @@
     return days;
   }
 
-  function renderHomeDashboard(daysData) {
+  function renderHomeDashboard(daysData, dailyStepsGoal) {
     const kpiGrid = document.getElementById('home-kpi-grid');
     const daysGrid = document.getElementById('home-days-grid');
     if (!kpiGrid || !daysGrid) return;
@@ -171,6 +171,11 @@
     const avgDeficit = withCalories.length ? Math.round(deficitAccum / withCalories.length) : 0;
     const trainingDays = sortedDays.filter(d => d.gym || d.activity).length;
     const deficitClass = deficitAccum >= 0 ? 'good' : 'bad';
+    const today = sortedDays[sortedDays.length - 1] || null;
+    const todaySteps = today ? (today.steps || 0) : 0;
+    const goalSteps = Math.max(0, parseInt(dailyStepsGoal, 10) || 0);
+    const stepsPct = goalSteps > 0 ? Math.round((todaySteps / goalSteps) * 100) : 0;
+    const stepsClass = goalSteps > 0 && todaySteps >= goalSteps ? 'good' : '';
 
     kpiGrid.innerHTML = `
       <div class="home-kpi">
@@ -184,6 +189,11 @@
       <div class="home-kpi">
         <div class="home-kpi-label">Dias activos</div>
         <div class="home-kpi-value">${trainingDays}/7</div>
+      </div>
+      <div class="home-kpi">
+        <div class="home-kpi-label">Pasos hoy</div>
+        <div class="home-kpi-value ${stepsClass}">${todaySteps} / ${goalSteps > 0 ? goalSteps : 'sin meta'}</div>
+        <div class="home-kpi-sub">${goalSteps > 0 ? `${stepsPct}% de la meta` : 'Define una meta en Gym > Pasos'}</div>
       </div>
     `;
 
@@ -297,8 +307,9 @@
     const start = days[0];
     const end = days[days.length - 1];
 
-    const [trainingRes, ...eatResList] = await Promise.all([
+    const [trainingRes, userInfoRes, ...eatResList] = await Promise.all([
       api('/api/gym/training-days', { start_date: start, end_date: end }),
+      api('/api/gym/user-info/get', {}),
       ...days.map(date => api('/api/eat/dashboard/list', { date }))
     ]);
 
@@ -325,18 +336,26 @@
         ? parseInt(eatRes.data.energy.net_kcal, 10) || 0
         : 0;
 
+      const steps = eatRes && eatRes.ok && eatRes.data && eatRes.data.energy
+        ? parseInt(eatRes.data.energy.steps, 10) || 0
+        : 0;
       const deficitSigned = hasConsumedCalories ? -net : 0;
       const tr = trainingByDate[date] || { gym: false, activity: false };
       return {
         date,
         deficitSigned,
         hasConsumedCalories,
+        steps,
         gym: tr.gym,
         activity: tr.activity,
       };
     });
 
-    renderHomeDashboard(daysData);
+    const dailyStepsGoal = userInfoRes && userInfoRes.ok && userInfoRes.data
+      ? parseInt(userInfoRes.data.daily_steps_goal, 10) || 0
+      : 0;
+
+    renderHomeDashboard(daysData, dailyStepsGoal);
   }
 
   loadHomeDashboard();

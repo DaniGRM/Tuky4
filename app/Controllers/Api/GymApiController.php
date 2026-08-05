@@ -60,6 +60,36 @@ final class GymApiController extends BaseApiController
         $this->run('deleteActivityRecordAction');
     }
 
+    public function listSports(): void
+    {
+        $this->run('listSportsAction');
+    }
+
+    public function addSport(): void
+    {
+        $this->run('addSportAction');
+    }
+
+    public function addSportRegister(): void
+    {
+        $this->run('addSportRegisterAction');
+    }
+
+    public function getSportHistory(): void
+    {
+        $this->run('getSportHistoryAction');
+    }
+
+    public function deleteSport(): void
+    {
+        $this->run('deleteSportAction');
+    }
+
+    public function deleteSportRegister(): void
+    {
+        $this->run('deleteSportRegisterAction');
+    }
+
     public function listExercises(): void
     {
         $this->run('listExercisesAction');
@@ -287,6 +317,18 @@ final class GymApiController extends BaseApiController
             }
         }
 
+        $sportDates = $db->select('sports_register', ['date'], [
+            'date[>=]' => $startDate,
+            'date[<=]' => $endDate,
+            'GROUP' => 'date',
+        ]);
+        foreach ($sportDates as $row) {
+            $date = (string) ($row['date'] ?? '');
+            if (isset($rows[$date])) {
+                $rows[$date]['activity'] = true;
+            }
+        }
+
         return [
             'ok' => true,
             'data' => array_values($rows),
@@ -439,6 +481,131 @@ final class GymApiController extends BaseApiController
         }
 
         $db->delete('activities_records', ['id' => $recordId]);
+        return ['ok' => true];
+    }
+
+    /** @return array<string, mixed> */
+    protected function listSportsAction(): array
+    {
+        $db = $this->medoo();
+
+        $rows = $db->select('sports', ['id', 'name', 'icon', 'created_at'], [
+            'ORDER' => ['created_at' => 'DESC', 'id' => 'DESC'],
+        ]);
+
+        return ['ok' => true, 'data' => $rows ?: []];
+    }
+
+    /** @return array<string, mixed> */
+    protected function addSportAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $name = trim((string) ($in['name'] ?? ''));
+        $icon = trim((string) ($in['icon'] ?? 'fa-solid fa-futbol'));
+
+        if ($name === '') {
+            return ['ok' => false, 'msg' => 'Nombre vacio'];
+        }
+        if ($icon === '') {
+            $icon = 'fa-solid fa-futbol';
+        }
+
+        $db->insert('sports', [
+            'name' => $name,
+            'icon' => $icon,
+        ]);
+
+        return [
+            'ok' => true,
+            'id' => $this->lastInsertId(),
+            'name' => $name,
+            'icon' => $icon,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    protected function addSportRegisterAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $sportId = (int) ($in['sport_id'] ?? 0);
+        $date = trim((string) ($in['date'] ?? date('Y-m-d')));
+        $duration = (int) ($in['duration'] ?? 0);
+
+        if ($sportId <= 0) {
+            return ['ok' => false, 'msg' => 'Deporte invalido'];
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return ['ok' => false, 'msg' => 'Fecha invalida'];
+        }
+        if ($duration <= 0) {
+            return ['ok' => false, 'msg' => 'Duracion invalida'];
+        }
+
+        $exists = $db->has('sports', ['id' => $sportId]);
+        if (!$exists) {
+            return ['ok' => false, 'msg' => 'Deporte no encontrado'];
+        }
+
+        $db->insert('sports_register', [
+            'sport_id' => $sportId,
+            'date' => $date,
+            'duration' => $duration,
+        ]);
+
+        return ['ok' => true, 'id' => $this->lastInsertId()];
+    }
+
+    /** @return array<string, mixed> */
+    protected function getSportHistoryAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $sportId = (int) ($in['sport_id'] ?? 0);
+        if ($sportId <= 0) {
+            return ['ok' => false, 'msg' => 'Deporte invalido'];
+        }
+
+        $rows = $db->select('sports_register', ['id', 'sport_id', 'date', 'duration'], [
+            'sport_id' => $sportId,
+            'ORDER' => ['date' => 'DESC', 'id' => 'DESC'],
+            'LIMIT' => 50,
+        ]);
+
+        return ['ok' => true, 'data' => $rows ?: []];
+    }
+
+    /** @return array<string, mixed> */
+    protected function deleteSportAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $sportId = (int) ($in['sport_id'] ?? 0);
+        if ($sportId <= 0) {
+            return ['ok' => false, 'msg' => 'Deporte invalido'];
+        }
+
+        $db->delete('sports', ['id' => $sportId]);
+        return ['ok' => true];
+    }
+
+    /** @return array<string, mixed> */
+    protected function deleteSportRegisterAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $recordId = (int) ($in['record_id'] ?? 0);
+        if ($recordId <= 0) {
+            return ['ok' => false, 'msg' => 'Registro invalido'];
+        }
+
+        $db->delete('sports_register', ['id' => $recordId]);
         return ['ok' => true];
     }
 
