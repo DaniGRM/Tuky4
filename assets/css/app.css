@@ -453,6 +453,15 @@ hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
   background: linear-gradient(140deg, rgba(108,99,255,.35), rgba(255,101,132,.22));
 }
 
+.eat-meal-overlay {
+  align-items: flex-start;
+  padding-top: .85rem;
+}
+
+.eat-meal-overlay .eat-meal-modal {
+  margin-top: 0;
+}
+
 .eat-energy-label {
   color: var(--muted);
   font-size: .76rem;
@@ -613,6 +622,21 @@ hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
     -webkit-overflow-scrolling: touch;
   }
   .overlay.open .modal { transform: translateY(0); }
+
+  .eat-meal-overlay {
+    align-items: flex-start;
+    padding: 0;
+  }
+
+  .eat-meal-overlay .eat-meal-modal {
+    border-radius: 0 0 var(--radius) var(--radius);
+    transform: translateY(-100%);
+  }
+
+  .eat-meal-overlay.open .eat-meal-modal {
+    transform: translateY(0);
+  }
+
   .modal::before {
     content: '';
     display: block;

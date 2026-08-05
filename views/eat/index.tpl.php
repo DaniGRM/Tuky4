@@ -78,8 +78,8 @@
         </div>
     </div>
 
-    <div class="overlay" id="modal-eat-meal" onclick="closeOnBg(event,'modal-eat-meal')">
-        <div class="modal" style="max-width:520px">
+    <div class="overlay eat-meal-overlay" id="modal-eat-meal" onclick="closeOnBg(event,'modal-eat-meal')">
+        <div class="modal eat-meal-modal" style="max-width:520px">
             <h2 id="eat-meal-modal-title">Desayuno</h2>
             <input type="hidden" id="eat-meal-key" value="breakfast">
 
