@@ -96,11 +96,14 @@
 </head>
 <body>
 
-<header>
-  <a href="/" class="btn btn-ghost" title="Inicio">
-    <img src="Tuky4Gym.png" alt="Logo" width="56" height="56">
+<header class="app-header">
+  <a href="/" class="btn btn-ghost app-header-logo" title="Inicio">
+    <img src="Tuky4.png" alt="Logo" width="200" height="200">
   </a>
-  <h1>Tuky<span>4</span></h1>
+  <div class="app-header-copy">
+    <span class="app-header-kicker">Tuky<span>4</span></span>
+    <h1 class="app-header-title">Home <span>Dashboard</span></h1>
+  </div>
 </header>
 
 <main class="home-wrap">

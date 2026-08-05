@@ -50,6 +50,7 @@ $router->get('/eat', [EatController::class, 'index']);
 
 $router->post('/api/eat/portions/list', [EatApiController::class, 'listPortions']);
 $router->post('/api/eat/tags/list', [EatApiController::class, 'listTags']);
+$router->post('/api/eat/tags/update-color', [EatApiController::class, 'updateTagColor']);
 $router->post('/api/eat/units/list', [EatApiController::class, 'listUnits']);
 $router->post('/api/eat/portions/add', [EatApiController::class, 'addPortion']);
 $router->post('/api/eat/portions/update', [EatApiController::class, 'updatePortion']);

@@ -18,12 +18,14 @@
 
 <body>
 
-    <header>
-        <a href="/" class="btn btn-ghost" title="Inicio">
-            <img src="Tuky4Gym.png" alt="Logo" width="64" height="64">
+    <header class="app-header">
+        <a href="/" class="btn btn-ghost app-header-logo" title="Inicio">
+            <img src="Tuky4.png" alt="Logo" width="64" height="64">
         </a>
-
-        <h1>Tuky<span>4Eat</span></h1>
+        <div class="app-header-copy">
+            <span class="app-header-kicker">Tuky<span>4</span></span>
+            <h1 class="app-header-title">Modulo <span>Eat</span></h1>
+        </div>
     </header>
 
     <main>
@@ -34,10 +36,14 @@
             <button class="pill" data-val="CRUD" onclick="setEatSection('CRUD')" title="Raciones">
                 <i class="fa-solid fa-utensils" aria-hidden="true"></i>
             </button>
+            <button class="pill" data-val="TAGS" onclick="setEatSection('TAGS')" title="Tags">
+                <i class="fa-solid fa-tag" aria-hidden="true"></i>
+            </button>
         </div>
 
         <?php require __DIR__ . '/dashboard.tpl.php'; ?>
         <?php require __DIR__ . '/portions.tpl.php'; ?>
+        <?php require __DIR__ . '/tags.tpl.php'; ?>
     </main>
 
     <div id="toast"></div>

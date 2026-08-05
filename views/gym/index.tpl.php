@@ -18,12 +18,14 @@
 
 <body>
 
-    <header>
-        <a href="/" class="btn btn-ghost" title="Inicio">
-            <img src="Tuky4Gym.png" alt="Logo" width="64" height="64">
+    <header class="app-header">
+        <a href="/" class="btn btn-ghost app-header-logo" title="Inicio">
+            <img src="Tuky4.png" alt="Logo" width="64" height="64">
         </a>
-
-        <h1>Tuky<span>4Gym</span></h1>
+        <div class="app-header-copy">
+            <span class="app-header-kicker">Tuky<span>4</span></span>
+            <h1 class="app-header-title">Modulo <span>Gym</span></h1>
+        </div>
     </header>
 
     <main>

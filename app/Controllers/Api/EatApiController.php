@@ -41,6 +41,11 @@ final class EatApiController extends BaseApiController
         $this->run('listTagsAction');
     }
 
+    public function updateTagColor(): void
+    {
+        $this->run('updateTagColorAction');
+    }
+
     public function addPortion(): void
     {
         $this->run('addPortionAction');
@@ -446,11 +451,44 @@ final class EatApiController extends BaseApiController
     protected function listTagsAction(): array
     {
         $db = $this->medoo();
-        $rows = $db->select('eat_tags', ['id', 'name'], [
+        $rows = $db->select('eat_tags', ['id', 'name', 'color'], [
             'ORDER' => ['name' => 'ASC', 'id' => 'ASC'],
         ]);
 
         return ['ok' => true, 'data' => $rows ?: []];
+    }
+
+    /** @return array<string, mixed> */
+    protected function updateTagColorAction(): array
+    {
+        $in = $this->input();
+        $db = $this->medoo();
+
+        $id = (int) ($in['id'] ?? 0);
+        $color = $this->normalizeHexColor((string) ($in['color'] ?? ''));
+
+        if ($id <= 0) {
+            return ['ok' => false, 'msg' => 'Tag invalida'];
+        }
+
+        $exists = $db->has('eat_tags', ['id' => $id]);
+        if (!$exists) {
+            return ['ok' => false, 'msg' => 'Tag no encontrada'];
+        }
+
+        $db->update('eat_tags', [
+            'color' => $color !== '' ? $color : null,
+        ], [
+            'id' => $id,
+        ]);
+
+        return [
+            'ok' => true,
+            'data' => [
+                'id' => $id,
+                'color' => $color !== '' ? $color : null,
+            ],
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -498,9 +536,12 @@ final class EatApiController extends BaseApiController
         ))));
         $tagsById = [];
         if ($tagIds) {
-            $tagRows = $db->select('eat_tags', ['id', 'name'], ['id' => $tagIds]);
+            $tagRows = $db->select('eat_tags', ['id', 'name', 'color'], ['id' => $tagIds]);
             foreach ($tagRows as $tagRow) {
-                $tagsById[(int) $tagRow['id']] = (string) $tagRow['name'];
+                $tagsById[(int) $tagRow['id']] = [
+                    'name' => (string) $tagRow['name'],
+                    'color' => $this->normalizeHexColor((string) ($tagRow['color'] ?? '')),
+                ];
             }
         }
 
@@ -518,7 +559,8 @@ final class EatApiController extends BaseApiController
                 'unit_name' => $units[$uid]['name'] ?? '',
                 'unit_icon' => $units[$uid]['icon'] ?? '',
                 'tag_id' => $tagId,
-                'tag_name' => $tagId !== null ? ($tagsById[$tagId] ?? '') : '',
+                'tag_name' => $tagId !== null ? (($tagsById[$tagId]['name'] ?? '')) : '',
+                'tag_color' => $tagId !== null ? (($tagsById[$tagId]['color'] ?? '')) : '',
             ];
         }
 
@@ -643,5 +685,23 @@ final class EatApiController extends BaseApiController
 
         $db->insert('eat_tags', ['name' => $name]);
         return (int) $this->lastInsertId();
+    }
+
+    private function normalizeHexColor(string $raw): string
+    {
+        $color = strtoupper(trim($raw));
+        if ($color === '') {
+            return '';
+        }
+
+        if (preg_match('/^#[0-9A-F]{6}$/', $color) === 1) {
+            return $color;
+        }
+
+        if (preg_match('/^#[0-9A-F]{3}$/', $color) === 1) {
+            return '#' . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
+        }
+
+        return '';
     }
 }

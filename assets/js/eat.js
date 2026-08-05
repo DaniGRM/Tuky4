@@ -35,8 +35,10 @@ function setEatSection(section) {
 
 	const dashboard = document.getElementById('eat-dashboard-section');
 	const crud = document.getElementById('eat-crud-section');
+	const tagsSection = document.getElementById('eat-tags-section');
 	if (dashboard) dashboard.style.display = section === 'DASHBOARD' ? '' : 'none';
 	if (crud) crud.style.display = section === 'CRUD' ? '' : 'none';
+	if (tagsSection) tagsSection.style.display = section === 'TAGS' ? '' : 'none';
 }
 
 function formatAmount(n) {
@@ -77,12 +79,52 @@ function normalizeTagName(name) {
 	return String(name || '').trim().toLowerCase();
 }
 
+function normalizeHexColor(color) {
+	const value = String(color || '').trim().toUpperCase();
+	if (!value) return '';
+	if (/^#[0-9A-F]{6}$/.test(value)) return value;
+	if (/^#[0-9A-F]{3}$/.test(value)) {
+		return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+	}
+	return '';
+}
+
+function hexToRgb(color) {
+	const hex = normalizeHexColor(color);
+	if (!hex) return null;
+	return {
+		r: parseInt(hex.slice(1, 3), 16),
+		g: parseInt(hex.slice(3, 5), 16),
+		b: parseInt(hex.slice(5, 7), 16),
+	};
+}
+
+function getTagById(tagId) {
+	const id = parseInt(tagId, 10) || 0;
+	if (id <= 0) return null;
+	return tags.find(t => (parseInt(t.id, 10) || 0) === id) || null;
+}
+
+function buildTagInlineStyle(color) {
+	const value = buildTagStyleValue(color);
+	return value ? ` style="${value}"` : '';
+}
+
+function buildTagStyleValue(color) {
+	const hex = normalizeHexColor(color);
+	const rgb = hexToRgb(hex);
+	if (!rgb || !hex) return '';
+	const soft = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, .16)`;
+	return `border-color:${hex};background:${soft};color:${hex}`;
+}
+
 function setTagOptions(rawTags) {
 	const list = Array.isArray(rawTags) ? rawTags : [];
 	tags = list
 		.map(t => ({
 			id: parseInt(t.id, 10) || 0,
 			name: String(t.name || '').trim(),
+			color: normalizeHexColor(t.color || ''),
 		}))
 		.filter(t => t.id > 0 && t.name !== '');
 
@@ -97,6 +139,7 @@ function setTagOptions(rawTags) {
 	}
 
 	renderMealTagFilterOptions();
+	renderTagsPanel();
 }
 
 function collectTagsFromPortions() {
@@ -107,10 +150,105 @@ function collectTagsFromPortions() {
 		if (!tagName || tagId <= 0) return;
 		const key = normalizeTagName(tagName);
 		if (!byName.has(key)) {
-			byName.set(key, { id: tagId, name: tagName });
+			const color = normalizeHexColor(p.tag_color || getTagById(tagId)?.color || '');
+			byName.set(key, { id: tagId, name: tagName, color });
 		}
 	});
 	return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+function renderTagsPanel() {
+	const grid = document.getElementById('eat-tags-grid');
+	if (!grid) return;
+
+	grid.innerHTML = '';
+	if (!tags.length) {
+		const empty = document.createElement('div');
+		empty.className = 'empty-state';
+		empty.id = 'eat-tags-empty';
+		empty.style.gridColumn = '1/-1';
+		empty.innerHTML = '<p>Aun no hay tags creadas.</p>';
+		grid.appendChild(empty);
+		return;
+	}
+
+	tags.forEach(tag => {
+		const card = document.createElement('div');
+		card.className = 'card eat-tag-card';
+		const color = normalizeHexColor(tag.color || '');
+		const chipStyle = buildTagInlineStyle(color);
+		const inputValue = color || '#6C63FF';
+		card.innerHTML = `
+			<div class="eat-tag-card-head">
+				<span class="eat-tag-chip"${chipStyle}>#${esc(tag.name)}</span>
+			</div>
+			<div class="eat-tag-card-controls">
+				<input type="color" value="${inputValue}" onchange="updateTagColor(${tag.id}, this.value)">
+				<button class="btn btn-primary btn-sm" onclick="updateTagColor(${tag.id}, document.querySelector('#tag-color-${tag.id}')?.value || '${inputValue}')" style="display:none">Guardar</button>
+				<button class="btn btn-ghost btn-sm" onclick="clearTagColor(${tag.id})">Limpiar</button>
+			</div>
+		`;
+		const colorInput = card.querySelector('input[type="color"]');
+		if (colorInput) {
+			colorInput.id = `tag-color-${tag.id}`;
+		}
+		grid.appendChild(card);
+	});
+}
+
+async function updateTagColor(tagId, color) {
+	const id = parseInt(tagId, 10) || 0;
+	if (id <= 0) return;
+	const normalized = normalizeHexColor(color);
+	if (!normalized) {
+		toast('Color invalido');
+		return;
+	}
+
+	const res = await api('/api/eat/tags/update-color', { id, color: normalized });
+	if (!res.ok) {
+		toast(res.msg || 'Error actualizando color');
+		return;
+	}
+
+	const tag = getTagById(id);
+	if (tag) tag.color = normalized;
+	applyTagColorsToPortions();
+	renderTagsPanel();
+	renderPortions(portions);
+	renderMealTagFilterOptions();
+	renderMealRationOptions();
+	toast('Color guardado');
+}
+
+async function clearTagColor(tagId) {
+	const id = parseInt(tagId, 10) || 0;
+	if (id <= 0) return;
+
+	const res = await api('/api/eat/tags/update-color', { id, color: '' });
+	if (!res.ok) {
+		toast(res.msg || 'Error limpiando color');
+		return;
+	}
+
+	const tag = getTagById(id);
+	if (tag) tag.color = '';
+	applyTagColorsToPortions();
+	renderTagsPanel();
+	renderPortions(portions);
+	renderMealTagFilterOptions();
+	renderMealRationOptions();
+	toast('Color limpiado');
+}
+
+function applyTagColorsToPortions() {
+	portions = portions.map(p => {
+		const tag = getTagById(p.tag_id);
+		return {
+			...p,
+			tag_color: normalizeHexColor(tag?.color || p.tag_color || ''),
+		};
+	});
 }
 
 function renderMealTagFilterOptions() {
@@ -122,9 +260,18 @@ function renderMealTagFilterOptions() {
 		const addTag = (tag) => {
 			const name = String(tag?.name || '').trim();
 			const id = parseInt(tag?.id, 10) || 0;
+			const color = normalizeHexColor(tag?.color || '');
 			if (!name || id <= 0) return;
 			const key = normalizeTagName(name);
-			if (!mergedMap.has(key)) mergedMap.set(key, { id, name });
+			if (!mergedMap.has(key)) {
+				mergedMap.set(key, { id, name, color });
+				return;
+			}
+
+			const current = mergedMap.get(key);
+			if (current && !current.color && color) {
+				current.color = color;
+			}
 		};
 		tags.forEach(addTag);
 		collectTagsFromPortions().forEach(addTag);
@@ -134,18 +281,22 @@ function renderMealTagFilterOptions() {
 	const previous = selectedMealTagFilter;
 	container.innerHTML = '';
 
-	const createBadge = (idValue, label) => {
+	const createBadge = (idValue, label, color = '') => {
 		const btn = document.createElement('button');
 		btn.type = 'button';
 		btn.className = 'eat-tag-badge' + (String(selectedMealTagFilter) === String(idValue) ? ' active' : '');
 		btn.textContent = label;
 		btn.setAttribute('onclick', `onMealTagFilterChange('${String(idValue)}')`);
+		const styleValue = buildTagStyleValue(color);
+		if (styleValue) {
+			btn.style.cssText = styleValue;
+		}
 		return btn;
 	};
 
 	container.appendChild(createBadge('', 'Todas'));
 	merged.forEach(tag => {
-		container.appendChild(createBadge(String(tag.id), tag.name));
+		container.appendChild(createBadge(String(tag.id), tag.name, tag.color || ''));
 	});
 
 	if (previous && merged.some(t => String(t.id) === String(previous))) {
@@ -211,7 +362,8 @@ function renderPortions(data) {
 		const unitIcon = p.unit_icon ? `<i class="${esc(p.unit_icon)}" aria-hidden="true"></i>` : '';
 		const unitName = p.unit_name || '';
 		const tagName = String(p.tag_name || '').trim();
-		const tagBadge = tagName ? `<span class="badge">#${esc(tagName)}</span>` : '';
+		const tagColor = normalizeHexColor(p.tag_color || getTagById(p.tag_id)?.color || '');
+		const tagBadge = tagName ? `<span class="badge"${buildTagInlineStyle(tagColor)}>#${esc(tagName)}</span>` : '';
 		card.innerHTML = `
 			<div class="card-name">${esc(p.name)}</div>
 			<div class="card-record">
@@ -313,7 +465,8 @@ function renderMealRationOptions() {
 		card.setAttribute('aria-label', `Seleccionar ${p.name}`);
 		const unitIcon = p.unit_icon ? `<i class="${esc(p.unit_icon)}" aria-hidden="true"></i>` : '';
 		const tagName = String(p.tag_name || '').trim();
-		const tagRow = tagName ? `<span class="eat-ration-tag">#${esc(tagName)}</span>` : '';
+		const tagColor = normalizeHexColor(p.tag_color || getTagById(p.tag_id)?.color || '');
+		const tagRow = tagName ? `<span class="eat-ration-tag"${buildTagInlineStyle(tagColor)}>#${esc(tagName)}</span>` : '';
 		card.innerHTML = `
 			<span class="eat-ration-amount">${formatAmount(p.amount)} ${unitIcon}</span>
 			<span class="eat-ration-name">${esc(p.name)}</span>
@@ -410,6 +563,7 @@ async function loadPortions() {
 		return;
 	}
 	portions = Array.isArray(res.data) ? res.data : [];
+	applyTagColorsToPortions();
 	renderPortions(portions);
 	renderMealTagFilterOptions();
 	renderMealRationOptions();
@@ -422,6 +576,9 @@ async function loadTags() {
 		return;
 	}
 	setTagOptions(res.data || []);
+	applyTagColorsToPortions();
+	renderPortions(portions);
+	renderMealRationOptions();
 }
 
 async function loadEatDashboard() {
