@@ -73,6 +73,7 @@ function resetPortionForm() {
 	if (title) title.textContent = 'Nueva racion';
 	const saveBtn = document.getElementById('portion-save-btn');
 	if (saveBtn) saveBtn.textContent = 'Guardar';
+	renderPortionTagSelector('');
 }
 
 function normalizeTagName(name) {
@@ -128,18 +129,87 @@ function setTagOptions(rawTags) {
 		}))
 		.filter(t => t.id > 0 && t.name !== '');
 
-	const datalist = document.getElementById('portion-tag-list');
-	if (datalist) {
-		datalist.innerHTML = '';
-		tags.forEach(tag => {
-			const opt = document.createElement('option');
-			opt.value = tag.name;
-			datalist.appendChild(opt);
-		});
-	}
+	const currentTagValue = document.getElementById('portion-tag')?.value || '';
+	renderPortionTagSelector(currentTagValue);
 
 	renderMealTagFilterOptions();
 	renderTagsPanel();
+}
+
+function renderPortionTagSelector(selectedName = '') {
+	const select = document.getElementById('portion-tag-select');
+	const input = document.getElementById('portion-tag');
+	if (!select || !input) return;
+
+	const selectedNorm = normalizeTagName(selectedName);
+	select.innerHTML = '';
+
+	const emptyOpt = document.createElement('option');
+	emptyOpt.value = '';
+	emptyOpt.textContent = 'Sin tag';
+	select.appendChild(emptyOpt);
+
+	let matchedId = '';
+	tags.forEach(tag => {
+		const opt = document.createElement('option');
+		opt.value = String(tag.id);
+		opt.textContent = tag.name;
+		select.appendChild(opt);
+		if (selectedNorm && normalizeTagName(tag.name) === selectedNorm) {
+			matchedId = String(tag.id);
+		}
+	});
+
+	const newOpt = document.createElement('option');
+	newOpt.value = '__new__';
+	newOpt.textContent = 'Escribir nueva tag';
+	select.appendChild(newOpt);
+
+	if (!selectedNorm) {
+		select.value = '';
+		input.value = '';
+		return;
+	}
+
+	input.value = selectedName;
+	select.value = matchedId || '__new__';
+}
+
+function onPortionTagSelectChange() {
+	const select = document.getElementById('portion-tag-select');
+	const input = document.getElementById('portion-tag');
+	if (!select || !input) return;
+
+	if (select.value === '') {
+		input.value = '';
+		return;
+	}
+
+	if (select.value === '__new__') {
+		input.focus();
+		input.select();
+		return;
+	}
+
+	const selectedTag = getTagById(select.value);
+	if (selectedTag) {
+		input.value = selectedTag.name;
+	}
+}
+
+function onPortionTagInputChange() {
+	const select = document.getElementById('portion-tag-select');
+	const input = document.getElementById('portion-tag');
+	if (!select || !input) return;
+
+	const typed = normalizeTagName(input.value);
+	if (!typed) {
+		select.value = '';
+		return;
+	}
+
+	const existing = tags.find(t => normalizeTagName(t.name) === typed);
+	select.value = existing ? String(existing.id) : '__new__';
 }
 
 function collectTagsFromPortions() {
@@ -677,7 +747,7 @@ function editPortion(id) {
 	document.getElementById('portion-name').value = p.name;
 	document.getElementById('portion-amount').value = formatAmount(p.amount);
 	renderUnitOptions(p.unit_id);
-	document.getElementById('portion-tag').value = String(p.tag_name || '');
+	renderPortionTagSelector(String(p.tag_name || ''));
 	document.getElementById('portion-calories').value = parseInt(p.calories, 10);
 
 	const title = document.getElementById('portion-modal-title');
@@ -743,6 +813,11 @@ if (portionNameInput) {
 	portionNameInput.addEventListener('keydown', e => {
 		if (e.key === 'Enter') savePortion();
 	});
+}
+
+const portionTagInput = document.getElementById('portion-tag');
+if (portionTagInput) {
+	portionTagInput.addEventListener('input', onPortionTagInputChange);
 }
 
 document.getElementById('modal-portion')?.addEventListener('click', e => {

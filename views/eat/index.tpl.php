@@ -69,8 +69,8 @@
             </div>
             <div class="field">
                 <label>Tag (opcional)</label>
-                <input type="text" id="portion-tag" list="portion-tag-list" placeholder="ej. Proteina, Merienda, Pre-entreno" autocomplete="off">
-                <datalist id="portion-tag-list"></datalist>
+                <select id="portion-tag-select" onchange="onPortionTagSelectChange()"></select>
+                <input type="text" id="portion-tag" placeholder="Escribe una nueva tag" autocomplete="off" style="margin-top:.5rem">
             </div>
             <div class="field">
                 <label>Calorias (kcal)</label>
