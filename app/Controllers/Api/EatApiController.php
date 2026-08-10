@@ -71,6 +71,9 @@ final class EatApiController extends BaseApiController
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return ['ok' => false, 'msg' => 'Fecha invalida'];
         }
+        if ($this->isFutureDate($date)) {
+            return ['ok' => false, 'msg' => 'No se puede usar una fecha futura'];
+        }
 
         $records = $db->select('eat_records', ['id', 'date', 'key'], [
             'date' => $date,
@@ -377,6 +380,11 @@ final class EatApiController extends BaseApiController
         return $sum;
     }
 
+    private function isFutureDate(string $date): bool
+    {
+        return $date > date('Y-m-d');
+    }
+
     /** @return array<string, mixed> */
     protected function addDashboardRationAction(): array
     {
@@ -389,6 +397,9 @@ final class EatApiController extends BaseApiController
 
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return ['ok' => false, 'msg' => 'Fecha invalida'];
+        }
+        if ($this->isFutureDate($date)) {
+            return ['ok' => false, 'msg' => 'No se puede usar una fecha futura'];
         }
         if (!in_array($key, self::MEAL_KEYS, true)) {
             return ['ok' => false, 'msg' => 'Comida invalida'];

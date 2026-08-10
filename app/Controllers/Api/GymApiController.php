@@ -5,6 +5,11 @@ namespace App\Controllers\Api;
 
 final class GymApiController extends BaseApiController
 {
+    private function isFutureDate(string $date): bool
+    {
+        return $date > date('Y-m-d');
+    }
+
     public function getUserInfo(): void
     {
         $this->run('getUserInfoAction');
@@ -198,6 +203,9 @@ final class GymApiController extends BaseApiController
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return ['ok' => false, 'msg' => 'Fecha invalida'];
         }
+        if ($this->isFutureDate($date)) {
+            return ['ok' => false, 'msg' => 'No se puede usar una fecha futura'];
+        }
 
         $row = $db->get('user_info_register', ['id', 'steps', 'weight'], ['date' => $date]);
         $steps = $row ? (int) ($row['steps'] ?? 0) : 0;
@@ -207,7 +215,7 @@ final class GymApiController extends BaseApiController
             $lastWeightRow = $db->get('user_info_register', ['weight'], [
                 'weight[!]' => null,
                 'weight[>]' => 0,
-                'date[<=]' => $date,
+                'date[<]' => $date,
                 'ORDER' => ['date' => 'DESC', 'id' => 'DESC'],
             ]);
 
@@ -239,6 +247,9 @@ final class GymApiController extends BaseApiController
 
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return ['ok' => false, 'msg' => 'Fecha invalida'];
+        }
+        if ($this->isFutureDate($date)) {
+            return ['ok' => false, 'msg' => 'No se puede usar una fecha futura'];
         }
         if ($steps < 0) {
             return ['ok' => false, 'msg' => 'Pasos invalidos'];

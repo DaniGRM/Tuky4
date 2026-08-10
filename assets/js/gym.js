@@ -34,6 +34,7 @@ let bikeDurationManual = false;
 let runningDurationManual = false;
 let currentSteps = 0;
 let currentDailyWeight = 0;
+let selectedStepsDate = todayIsoDate();
 let stepsLoaded = false;
 let userInfoLoaded = false;
 let dailySaveInFlight = false;
@@ -68,13 +69,66 @@ function setSection(section) {
 }
 
 function todayIsoDate() {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseIsoToLocalDate(ymd) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ''))) return null;
+  const [y, m, d] = String(ymd).split('-').map(v => parseInt(v, 10));
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== (m - 1) || date.getDate() !== d) return null;
+  return date;
+}
+
+function toIsoDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function addDaysIso(ymd, deltaDays) {
+  const base = parseIsoToLocalDate(ymd);
+  if (!base) return todayIsoDate();
+  base.setDate(base.getDate() + (parseInt(deltaDays, 10) || 0));
+  return toIsoDate(base);
+}
+
+function formatStepsDateLabel(ymd) {
+  if (ymd === todayIsoDate()) return 'Hoy';
+  return formatDate(ymd);
+}
+
+function renderStepsDateNav() {
+  const labelEl = document.getElementById('steps-day-label');
+  if (labelEl) labelEl.textContent = formatStepsDateLabel(selectedStepsDate);
+
+  const nextBtn = document.getElementById('steps-day-next');
+  if (nextBtn) {
+    const isToday = selectedStepsDate >= todayIsoDate();
+    nextBtn.disabled = isToday;
+    nextBtn.setAttribute('aria-disabled', isToday ? 'true' : 'false');
+  }
+}
+
+async function shiftStepsDate(deltaDays) {
+  const target = addDaysIso(selectedStepsDate, deltaDays);
+  const today = todayIsoDate();
+  if (target > today) return;
+
+  selectedStepsDate = target;
+  renderStepsDateNav();
+  await loadSteps(selectedStepsDate);
 }
 
 function renderStepsValue() {
   const display = document.getElementById('steps-display');
   if (!display) return;
-  display.textContent = String(Math.max(0, parseInt(currentSteps, 10) || 0));
+  display.value = String(Math.max(0, parseInt(currentSteps, 10) || 0));
 }
 
 function renderDailyWeightValue() {
@@ -82,6 +136,30 @@ function renderDailyWeightValue() {
   if (!display) return;
   const weight = Math.max(0, Number(currentDailyWeight || 0));
   display.textContent = weight.toFixed(1);
+}
+
+function changeDailySteps(delta) {
+  const step = parseInt(delta, 10) || 0;
+  const next = Math.max(0, (parseInt(currentSteps, 10) || 0) + step);
+  currentSteps = next;
+  renderStepsValue();
+  saveDailyRegisterImmediate();
+}
+
+function onStepsInputChange() {
+  const input = document.getElementById('steps-display');
+  if (!input) return;
+
+  const raw = String(input.value || '').trim();
+  if (raw === '') {
+    currentSteps = 0;
+    saveDailyRegisterImmediate();
+    return;
+  }
+
+  const parsed = parseInt(raw, 10);
+  currentSteps = Math.max(0, Number.isFinite(parsed) ? parsed : 0);
+  saveDailyRegisterImmediate();
 }
 
 function changeDailyWeight(delta) {
@@ -92,16 +170,23 @@ function changeDailyWeight(delta) {
   saveDailyRegisterImmediate();
 }
 
-async function loadSteps() {
-  const res = await api('/api/gym/steps/get', { date: todayIsoDate() });
+async function loadSteps(date = selectedStepsDate) {
+  const requested = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? String(date) : todayIsoDate();
+  const safeDate = requested > todayIsoDate() ? todayIsoDate() : requested;
+  selectedStepsDate = safeDate;
+  renderStepsDateNav();
+
+  const res = await api('/api/gym/steps/get', { date: safeDate });
   if (!res.ok) {
     toast(res.msg || 'Error cargando pasos');
     return;
   }
 
+  selectedStepsDate = String(res.data?.date || safeDate);
   currentSteps = Math.max(0, parseInt(res.data?.steps, 10) || 0);
   currentDailyWeight = Math.max(0, Number(res.data?.weight || 0));
   stepsLoaded = true;
+  renderStepsDateNav();
   renderStepsValue();
   renderDailyWeightValue();
 }
@@ -183,7 +268,7 @@ async function saveSteps() {
   const steps = Math.max(0, parseInt(currentSteps, 10) || 0);
   const weight = Math.max(0, Math.round(Number(currentDailyWeight || 0) * 10) / 10);
   const res = await api('/api/gym/steps/save', {
-    date: todayIsoDate(),
+    date: selectedStepsDate,
     steps,
     weight,
   });
@@ -201,6 +286,7 @@ async function saveSteps() {
 
 async function saveDailyRegisterImmediate() {
   const payload = {
+    date: selectedStepsDate,
     steps: Math.max(0, parseInt(currentSteps, 10) || 0),
     weight: Math.max(0, Math.round(Number(currentDailyWeight || 0) * 10) / 10),
   };
@@ -214,7 +300,7 @@ async function saveDailyRegisterImmediate() {
     dailySaveInFlight = true;
 
     const res = await api('/api/gym/steps/save', {
-      date: todayIsoDate(),
+      date: target.date,
       steps: target.steps,
       weight: target.weight,
     });
@@ -1800,4 +1886,5 @@ if (sportNameInput) {
 
 initDatePickers();
 renderRepPills(4);
+renderStepsDateNav();
 loadExercises();

@@ -1,5 +1,10 @@
 <div class="section-header">
     <span class="section-title">Pasos</span>
+    <div class="eat-date-nav" aria-label="Navegacion por fecha de pasos">
+        <button type="button" class="eat-date-btn" id="steps-day-prev" onclick="shiftStepsDate(-1)" aria-label="Dia anterior">&lt;</button>
+        <span class="eat-date-label" id="steps-day-label">Hoy</span>
+        <button type="button" class="eat-date-btn" id="steps-day-next" onclick="shiftStepsDate(1)" aria-label="Dia siguiente">&gt;</button>
+    </div>
 </div>
 
 <div class="card" style="max-width:480px;margin:0 auto;gap:.9rem">
@@ -9,11 +14,11 @@
         <label>Pasos</label>
     </div>
     <div class="card-record" style="justify-content:center">
-        Ajusta tus pasos del dia en bloques de 100
+        Escribe los pasos del dia
     </div>
 
     <div class="weight-ctrl">
-        <div class="weight-val" id="steps-display">0</div>
+        <input type="number" class="weight-val" id="steps-display" min="0" step="100" inputmode="numeric" oninput="onStepsInputChange()">
     </div>
 
     <hr style="margin:.25rem 0 .35rem">

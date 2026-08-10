@@ -27,6 +27,7 @@ let eatDashboard = {
 let selectedMealRationId = 0;
 let isAddingMealRation = false;
 let selectedMealTagFilter = '';
+let selectedDashboardDate = todayYmd();
 
 function setEatSection(section) {
 	document.querySelectorAll('.section-switch .pill').forEach(p =>
@@ -53,6 +54,56 @@ function todayYmd() {
 	const m = String(now.getMonth() + 1).padStart(2, '0');
 	const d = String(now.getDate()).padStart(2, '0');
 	return `${y}-${m}-${d}`;
+}
+
+function parseYmdToLocalDate(ymd) {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ''))) return null;
+	const [y, m, d] = String(ymd).split('-').map(v => parseInt(v, 10));
+	const date = new Date(y, m - 1, d);
+	if (date.getFullYear() !== y || date.getMonth() !== (m - 1) || date.getDate() !== d) return null;
+	return date;
+}
+
+function toYmd(date) {
+	const y = date.getFullYear();
+	const m = String(date.getMonth() + 1).padStart(2, '0');
+	const d = String(date.getDate()).padStart(2, '0');
+	return `${y}-${m}-${d}`;
+}
+
+function addDaysYmd(ymd, deltaDays) {
+	const base = parseYmdToLocalDate(ymd);
+	if (!base) return todayYmd();
+	base.setDate(base.getDate() + (parseInt(deltaDays, 10) || 0));
+	return toYmd(base);
+}
+
+function formatEatDashboardDateLabel(ymd) {
+	if (ymd === todayYmd()) return 'Hoy';
+	const date = parseYmdToLocalDate(ymd);
+	if (!date) return 'Hoy';
+	return formatDate(ymd);
+}
+
+function renderEatDashboardDateNav() {
+	const labelEl = document.getElementById('eat-day-label');
+	if (labelEl) labelEl.textContent = formatEatDashboardDateLabel(selectedDashboardDate);
+
+	const nextBtn = document.getElementById('eat-day-next');
+	if (nextBtn) {
+		const isToday = selectedDashboardDate >= todayYmd();
+		nextBtn.disabled = isToday;
+		nextBtn.setAttribute('aria-disabled', isToday ? 'true' : 'false');
+	}
+}
+
+async function shiftEatDashboardDate(deltaDays) {
+	const target = addDaysYmd(selectedDashboardDate, deltaDays);
+	const today = todayYmd();
+	if (target > today) return;
+	selectedDashboardDate = target;
+	renderEatDashboardDateNav();
+	await loadEatDashboard(selectedDashboardDate);
 }
 
 function resetPortionForm() {
@@ -651,16 +702,22 @@ async function loadTags() {
 	renderMealRationOptions();
 }
 
-async function loadEatDashboard() {
-	const res = await api('/api/eat/dashboard/list', { date: todayYmd() });
+async function loadEatDashboard(date = selectedDashboardDate) {
+	const requestedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? String(date) : todayYmd();
+	const safeDate = requestedDate > todayYmd() ? todayYmd() : requestedDate;
+	selectedDashboardDate = safeDate;
+	renderEatDashboardDateNav();
+
+	const res = await api('/api/eat/dashboard/list', { date: safeDate });
 	if (!res.ok) {
 		toast(res.msg || 'Error cargando dashboard');
 		return;
 	}
 
 	const data = res.data || {};
+	selectedDashboardDate = data.date || safeDate;
 	eatDashboard = {
-		date: data.date || todayYmd(),
+		date: selectedDashboardDate,
 		meals: data.meals || { breakfast: [], lunch: [], dinner: [], snacks: [] },
 		totals: data.totals || { breakfast: 0, lunch: 0, dinner: 0, snacks: 0, day_total: 0 },
 		energy: data.energy || {
@@ -677,6 +734,7 @@ async function loadEatDashboard() {
 		},
 	};
 
+	renderEatDashboardDateNav();
 	renderDashboardSummary();
 	const currentMeal = document.getElementById('eat-meal-key')?.value || 'breakfast';
 	renderEatMealList(currentMeal);
@@ -711,7 +769,7 @@ async function addRationToMeal(forcedRationId = null) {
 	renderMealRationOptions();
 
 	const res = await api('/api/eat/dashboard/add-ration', {
-		date: todayYmd(),
+		date: selectedDashboardDate,
 		key,
 		ration_id: rationId,
 	});

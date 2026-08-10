@@ -1,6 +1,11 @@
 <section id="eat-dashboard-section">
     <div class="section-header">
         <span class="section-title">Dashboard</span>
+        <div class="eat-date-nav" aria-label="Navegacion por fecha">
+            <button type="button" class="eat-date-btn" id="eat-day-prev" onclick="shiftEatDashboardDate(-1)" aria-label="Dia anterior">&lt;</button>
+            <span class="eat-date-label" id="eat-day-label">Hoy</span>
+            <button type="button" class="eat-date-btn" id="eat-day-next" onclick="shiftEatDashboardDate(1)" aria-label="Dia siguiente">&gt;</button>
+        </div>
     </div>
 
     <div class="chart-meta" style="margin-top:-.2rem;margin-bottom:1rem">
