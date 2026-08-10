@@ -708,6 +708,66 @@ hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
 .eat-energy-row.tef .eat-energy-bar > span { background: linear-gradient(90deg, #34d399, #4ade80); }
 .eat-energy-row.burned .eat-energy-bar > span { background: linear-gradient(90deg, #16a34a, #4ade80); }
 
+.eat-energy-feedback {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .72rem .78rem;
+  background: rgba(15,17,23,.45);
+  display: grid;
+  gap: .28rem;
+}
+
+.eat-energy-feedback-title {
+  font-size: .76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--muted);
+}
+
+.eat-energy-feedback-text {
+  font-size: .88rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.eat-energy-feedback-meta {
+  font-size: .76rem;
+  color: var(--muted);
+}
+
+.eat-energy-feedback.aligned {
+  border-color: rgba(74,222,128,.35);
+}
+
+.eat-energy-feedback.aligned .eat-energy-feedback-text {
+  color: #9ae6b4;
+}
+
+.eat-energy-feedback.overestimated {
+  border-color: rgba(255,101,132,.38);
+}
+
+.eat-energy-feedback.overestimated .eat-energy-feedback-text {
+  color: #ff9bb0;
+}
+
+.eat-energy-feedback.underestimated {
+  border-color: rgba(245,158,11,.38);
+}
+
+.eat-energy-feedback.underestimated .eat-energy-feedback-text {
+  color: #fcd34d;
+}
+
+.eat-energy-feedback.insufficient {
+  border-color: rgba(136,146,164,.35);
+}
+
+.eat-energy-feedback.insufficient .eat-energy-feedback-text {
+  color: #cbd5e1;
+}
+
 @keyframes eatBarGrow {
   from { transform: scaleX(0); opacity: .45; }
   to { transform: scaleX(1); opacity: 1; }

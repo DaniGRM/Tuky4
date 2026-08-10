@@ -542,6 +542,28 @@ function renderDashboardSummary() {
 		{ cls: 'burned', label: 'Gasto total estimado', value: burned },
 	];
 
+	const feedback = energy.weekly_feedback || null;
+	const feedbackStatus = String(feedback?.status || 'insufficient');
+	const feedbackMessage = String(feedback?.message || '');
+	const estimatedLoss = Number(feedback?.estimated_loss_kg || 0);
+	const realLossRaw = feedback?.real_loss_kg;
+	const realLoss = realLossRaw === null || realLossRaw === undefined ? null : Number(realLossRaw);
+	const formatKg = (n) => {
+		const value = Number(n || 0);
+		const rounded = Math.round(value * 100) / 100;
+		return `${rounded.toFixed(2)} kg`;
+	};
+	const feedbackDetail = realLoss === null
+		? `Estimada 7d: ${formatKg(estimatedLoss)}`
+		: `Estimada 7d: ${formatKg(estimatedLoss)} · Real 7d: ${formatKg(realLoss)}`;
+	const feedbackHtml = feedbackMessage ? `
+		<div class="eat-energy-feedback ${esc(feedbackStatus)}">
+			<div class="eat-energy-feedback-title">Ajuste del deficit</div>
+			<div class="eat-energy-feedback-text">${esc(feedbackMessage)}</div>
+			<div class="eat-energy-feedback-meta">${esc(feedbackDetail)}</div>
+		</div>
+	` : '';
+
 	const metricHtml = metrics.map(metric => `
 		<div class="eat-energy-row ${metric.cls}">
 			<div class="eat-energy-row-head">
@@ -559,6 +581,7 @@ function renderDashboardSummary() {
 			</div>
 			<span class="eat-energy-net ${netClass}">${net} kcal</span>
 		</div>
+		${feedbackHtml}
 		${metricHtml}
 	`;
 }

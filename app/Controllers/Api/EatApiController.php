@@ -188,6 +188,7 @@ final class EatApiController extends BaseApiController
         $tefKcal = (int) round($consumedKcal * 0.10);
         $burnedTotalKcal = $bmrKcal + $stepsKcal + $workoutsKcal + $tefKcal;
         $netKcal = $consumedKcal - $burnedTotalKcal;
+        $weeklyFeedback = $this->resolveWeeklyDeficitFeedback($db, $date);
 
         return [
             'ok' => true,
@@ -210,9 +211,159 @@ final class EatApiController extends BaseApiController
                     'workouts_kcal' => $workoutsKcal,
                     'burned_total_kcal' => $burnedTotalKcal,
                     'net_kcal' => $netKcal,
+                    'weekly_feedback' => $weeklyFeedback,
                 ],
             ],
         ];
+    }
+
+    /** @return array{status: string, message: string, start_date: string, end_date: string, estimated_loss_kg: float, real_loss_kg: float|null, delta_kg: float|null, samples: int} */
+    private function resolveWeeklyDeficitFeedback($db, string $endDate): array
+    {
+        $startTs = strtotime($endDate . ' -6 days');
+        $startDate = $startTs !== false ? date('Y-m-d', $startTs) : $endDate;
+
+        $cursor = $startDate;
+        $weeklyNetKcal = 0;
+        for ($i = 0; $i < 7; $i++) {
+            $consumedKcal = $this->computeConsumedCaloriesForDate($db, $cursor);
+            $dailyContext = $this->resolveDailyContext($db, $cursor);
+            $bmrKcal = (int) round($this->computeBmrMifflinStJeor(
+                $dailyContext['weight_kg'],
+                $dailyContext['height_cm'],
+                $dailyContext['age'],
+                $dailyContext['sex']
+            ));
+            $stepsKcal = (int) round($this->computeStepsCalories(
+                $dailyContext['steps'],
+                $dailyContext['weight_kg']
+            ));
+            $workoutsKcal = (int) round($this->computeWorkoutCalories($db, $cursor, $dailyContext['weight_kg']));
+            $tefKcal = (int) round($consumedKcal * 0.10);
+            $burnedTotalKcal = $bmrKcal + $stepsKcal + $workoutsKcal + $tefKcal;
+
+            $weeklyNetKcal += ($consumedKcal - $burnedTotalKcal);
+
+            $nextTs = strtotime($cursor . ' +1 day');
+            if ($nextTs === false) {
+                break;
+            }
+            $cursor = date('Y-m-d', $nextTs);
+        }
+
+        $estimatedLossKg = round((-$weeklyNetKcal) / 7700, 2);
+
+        $weightRows = $db->select('user_info_register', ['date', 'weight'], [
+            'date[>=]' => $startDate,
+            'date[<=]' => $endDate,
+            'weight[!]' => null,
+            'weight[>]' => 0,
+            'ORDER' => ['date' => 'ASC', 'id' => 'ASC'],
+        ]);
+
+        $samples = is_array($weightRows) ? count($weightRows) : 0;
+        if ($samples < 2) {
+            return [
+                'status' => 'insufficient',
+                'message' => 'Faltan pesajes para comparar la perdida semanal real con la estimada.',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'estimated_loss_kg' => $estimatedLossKg,
+                'real_loss_kg' => null,
+                'delta_kg' => null,
+                'samples' => $samples,
+            ];
+        }
+
+        $firstWeight = (float) ($weightRows[0]['weight'] ?? 0);
+        $lastWeight = (float) ($weightRows[$samples - 1]['weight'] ?? 0);
+        $realLossKg = round($firstWeight - $lastWeight, 2);
+        $deltaKg = round($estimatedLossKg - $realLossKg, 2);
+
+        $threshold = 0.15;
+        $status = 'aligned';
+        $message = 'Tu perdida real esta alineada con la estimada. El calculo del deficit parece bien calibrado.';
+
+        if ($deltaKg > $threshold) {
+            $status = 'overestimated';
+            $message = 'La perdida real esta por debajo de la estimada: estas sobreestimando el deficit calorico.';
+        } elseif ($deltaKg < -$threshold) {
+            $status = 'underestimated';
+            $message = 'La perdida real esta por encima de la estimada: estas infraestimando el deficit calorico.';
+        }
+
+        return [
+            'status' => $status,
+            'message' => $message,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'estimated_loss_kg' => $estimatedLossKg,
+            'real_loss_kg' => $realLossKg,
+            'delta_kg' => $deltaKg,
+            'samples' => $samples,
+        ];
+    }
+
+    private function computeConsumedCaloriesForDate($db, string $date): int
+    {
+        $records = $db->select('eat_records', ['id'], [
+            'date' => $date,
+        ]);
+
+        if (!$records) {
+            return 0;
+        }
+
+        $recordIds = array_values(array_map(
+            static fn (array $record): int => (int) ($record['id'] ?? 0),
+            $records
+        ));
+        $recordIds = array_values(array_filter($recordIds, static fn (int $id): bool => $id > 0));
+
+        if (!$recordIds) {
+            return 0;
+        }
+
+        $pivotRows = $db->select('eat_records_rations', ['id_eat_ration'], [
+            'id_eat_record' => $recordIds,
+        ]);
+        if (!$pivotRows) {
+            return 0;
+        }
+
+        $rationIds = array_values(array_unique(array_map(
+            static fn (array $row): int => (int) ($row['id_eat_ration'] ?? 0),
+            $pivotRows
+        )));
+        $rationIds = array_values(array_filter($rationIds, static fn (int $id): bool => $id > 0));
+
+        if (!$rationIds) {
+            return 0;
+        }
+
+        $portionRows = $db->select('eat_portions', ['id', 'calories'], [
+            'id' => $rationIds,
+        ]);
+        if (!$portionRows) {
+            return 0;
+        }
+
+        $caloriesByRationId = [];
+        foreach ($portionRows as $portion) {
+            $rid = (int) ($portion['id'] ?? 0);
+            if ($rid <= 0) {
+                continue;
+            }
+            $caloriesByRationId[$rid] = (int) ($portion['calories'] ?? 0);
+        }
+
+        $total = 0;
+        foreach ($pivotRows as $pivot) {
+            $rid = (int) ($pivot['id_eat_ration'] ?? 0);
+            $total += $caloriesByRationId[$rid] ?? 0;
+        }
+
+        return $total;
     }
 
     /**
