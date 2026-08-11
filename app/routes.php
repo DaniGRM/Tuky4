@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 use App\Controllers\Api\GymApiController;
 use App\Controllers\Api\EatApiController;
+use App\Controllers\Api\MoneyApiController;
 use App\Controllers\GymController;
 use App\Controllers\EatController;
+use App\Controllers\MoneyController;
 use App\Controllers\HomeController;
 use App\Core\Router;
 
@@ -59,5 +61,27 @@ $router->post('/api/eat/portions/delete', [EatApiController::class, 'deletePorti
 $router->post('/api/eat/dashboard/list', [EatApiController::class, 'listDashboard']);
 $router->post('/api/eat/dashboard/add-ration', [EatApiController::class, 'addDashboardRation']);
 $router->post('/api/eat/dashboard/delete-ration', [EatApiController::class, 'deleteDashboardRation']);
+
+$router->get('/money', [MoneyController::class, 'index']);
+
+$router->post('/api/money/dashboard/list', [MoneyApiController::class, 'listDashboard']);
+$router->post('/api/money/import/csv', [MoneyApiController::class, 'importCsv']);
+
+$router->post('/api/money/settings/get', [MoneyApiController::class, 'getSettings']);
+$router->post('/api/money/settings/save', [MoneyApiController::class, 'saveSettings']);
+
+$router->post('/api/money/expenses/list', [MoneyApiController::class, 'listExpenses']);
+$router->post('/api/money/movements/update', [MoneyApiController::class, 'updateMovement']);
+$router->post('/api/money/expenses/add', [MoneyApiController::class, 'addExpense']);
+$router->post('/api/money/expenses/update', [MoneyApiController::class, 'updateExpense']);
+$router->post('/api/money/expenses/delete', [MoneyApiController::class, 'deleteExpense']);
+
+$router->post('/api/money/rules/list', [MoneyApiController::class, 'listRules']);
+$router->post('/api/money/rules/save', [MoneyApiController::class, 'saveRule']);
+
+$router->post('/api/money/tags/list', [MoneyApiController::class, 'listTags']);
+$router->post('/api/money/tags/save', [MoneyApiController::class, 'saveTag']);
+$router->post('/api/money/tags/delete', [MoneyApiController::class, 'deleteTag']);
+$router->post('/api/money/tags/update-color', [MoneyApiController::class, 'updateTagColor']);
 
 return $router;

@@ -4,3 +4,4 @@ gym_track.db
 !.env.example
 vendor/
 composer.lock
+launch.json

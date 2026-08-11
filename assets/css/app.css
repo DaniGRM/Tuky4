@@ -768,6 +768,55 @@ hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
   color: #cbd5e1;
 }
 
+/* ── Money module ── */
+.money-quick-grid {
+  display: grid;
+  gap: .7rem;
+}
+
+.money-kpi-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.money-kpi-card {
+  gap: .35rem;
+}
+
+.money-kpi-title {
+  font-size: .78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .35px;
+  font-weight: 700;
+}
+
+.money-kpi-value {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.money-tag-create-row {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+
+.money-tag-create-row input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: .6rem .8rem;
+  font-size: .92rem;
+}
+
+.money-tag-create-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 @keyframes eatBarGrow {
   from { transform: scaleX(0); opacity: .45; }
   to { transform: scaleX(1); opacity: 1; }
@@ -815,6 +864,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
   .eat-meals-grid { grid-template-columns: 1fr 1fr; gap: .7rem; }
   .eat-meal-tile { min-height: 108px; padding: .9rem .8rem; }
   .eat-ration-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .money-kpi-grid { grid-template-columns: 1fr 1fr; }
 
   .card { padding: 1rem; }
   .card-name { font-size: 1.1rem; }

@@ -3,6 +3,7 @@ $uri = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/')
 $isHome = $uri === '/' || $uri === '/index.php';
 $isGym = str_starts_with($uri, '/gym');
 $isEat = str_starts_with($uri, '/eat');
+$isMoney = str_starts_with($uri, '/money');
 ?>
 
 <style>
@@ -117,5 +118,14 @@ $isEat = str_starts_with($uri, '/eat');
         <span class="mobile-nav-label">Tuky4Eat</span>
       </a>
     </li>
+    <!-- <li>
+      <a class="mobile-nav-link<?php echo $isMoney ? ' active' : ''; ?>" href="/money" aria-label="Money">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4.5v15"/>
+          <path d="M16 8.6c0-1.3-1.8-2.3-4-2.3s-4 1-4 2.3 1.8 2.2 4 2.2 4 1 4 2.3-1.8 2.3-4 2.3-4-1-4-2.3"/>
+        </svg>
+        <span class="mobile-nav-label">Tuky4Money</span>
+      </a>
+    </li> -->
   </ul>
 </nav>

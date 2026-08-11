@@ -22,6 +22,10 @@ let eatDashboard = {
 		workouts_kcal: 0,
 		burned_total_kcal: 0,
 		net_kcal: 0,
+		corrected_consumed_kcal: 0,
+		corrected_net_kcal: 0,
+		deficit_correction_factor: 1,
+		deficit_correction_applied_to: 'consumed_kcal',
 	},
 };
 let selectedMealRationId = 0;
@@ -519,13 +523,16 @@ function renderDashboardSummary() {
 	const energyList = document.getElementById('eat-energy-list');
 	if (!energyList) return;
 
-	const consumed = parseInt(energy.consumed_kcal, 10) || 0;
+	const consumedRaw = parseInt(energy.consumed_kcal, 10) || 0;
+	const consumed = parseInt(energy.corrected_consumed_kcal, 10) || consumedRaw;
 	const bmr = parseInt(energy.bmr_kcal, 10) || 0;
 	const steps = parseInt(energy.steps_kcal, 10) || 0;
 	const workouts = parseInt(energy.workouts_kcal, 10) || 0;
 	const tef = parseInt(energy.tef_kcal, 10) || 0;
 	const burned = parseInt(energy.burned_total_kcal, 10) || 0;
-	const net = parseInt(energy.net_kcal, 10) || 0;
+	const netRaw = parseInt(energy.net_kcal, 10) || 0;
+	const net = parseInt(energy.corrected_net_kcal, 10) || netRaw;
+	const correctionFactor = Number(energy.deficit_correction_factor || 1);
 
 	const maxValue = Math.max(consumed, bmr, steps, workouts, tef, burned, 1);
 	const widthPct = (value) => Math.max(3, Math.min(100, Math.round((value / maxValue) * 100)));
@@ -534,7 +541,7 @@ function renderDashboardSummary() {
 	const netLabel = net <= 0 ? `Deficit ${Math.abs(net)} kcal` : `Superavit +${net} kcal`;
 
 	const metrics = [
-		{ cls: 'consumed', label: 'Ingeridas', value: consumed },
+		{ cls: 'consumed', label: 'Ingeridas ajustadas', value: consumed },
 		{ cls: 'bmr', label: 'BMR (Mifflin-St Jeor)', value: bmr },
 		{ cls: 'steps', label: 'Actividad por pasos', value: steps },
 		{ cls: 'workout', label: 'Entrenamientos', value: workouts },
@@ -553,9 +560,12 @@ function renderDashboardSummary() {
 		const rounded = Math.round(value * 100) / 100;
 		return `${rounded.toFixed(2)} kg`;
 	};
-	const feedbackDetail = realLoss === null
-		? `Estimada 7d: ${formatKg(estimatedLoss)}`
-		: `Estimada 7d: ${formatKg(estimatedLoss)} · Real 7d: ${formatKg(realLoss)}`;
+	const feedbackDetail = (() => {
+		const base = realLoss === null
+			? `Estimada 7d: ${formatKg(estimatedLoss)}`
+			: `Estimada 7d: ${formatKg(estimatedLoss)} · Real 7d: ${formatKg(realLoss)}`;
+		return `${base} · Factor: x${correctionFactor.toFixed(2)} (consumo)`;
+	})();
 	const feedbackHtml = feedbackMessage ? `
 		<div class="eat-energy-feedback ${esc(feedbackStatus)}">
 			<div class="eat-energy-feedback-title">Ajuste del deficit</div>
@@ -754,6 +764,10 @@ async function loadEatDashboard(date = selectedDashboardDate) {
 			workouts_kcal: 0,
 			burned_total_kcal: 0,
 			net_kcal: 0,
+			corrected_consumed_kcal: 0,
+			corrected_net_kcal: 0,
+			deficit_correction_factor: 1,
+			deficit_correction_applied_to: 'consumed_kcal',
 		},
 	};
 

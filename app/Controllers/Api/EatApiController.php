@@ -10,6 +10,9 @@ final class EatApiController extends BaseApiController
     private const DEFAULT_HEIGHT_CM = 170.0;
     private const DEFAULT_AGE = 30;
     private const DEFAULT_WEIGHT_KG = 70.0;
+    private const DEFICIT_CORRECTION_MIN = 0.70;
+    private const DEFICIT_CORRECTION_MAX = 1.30;
+    private const DEFICIT_CORRECTION_MIN_ESTIMATED_KCAL = 800.0;
 
     public function listDashboard(): void
     {
@@ -173,7 +176,8 @@ final class EatApiController extends BaseApiController
         ));
 
         $dailyContext = $this->resolveDailyContext($db, $date);
-        $consumedKcal = (int) $totals['day_total'];
+        $energyTotals = $this->resolveDailyEnergyTotalsForDate($db, $date, $dailyContext);
+        $consumedKcal = (int) $energyTotals['consumed_kcal'];
         $bmrKcal = (int) round($this->computeBmrMifflinStJeor(
             $dailyContext['weight_kg'],
             $dailyContext['height_cm'],
@@ -186,9 +190,14 @@ final class EatApiController extends BaseApiController
         ));
         $workoutsKcal = (int) round($this->computeWorkoutCalories($db, $date, $dailyContext['weight_kg']));
         $tefKcal = (int) round($consumedKcal * 0.10);
-        $burnedTotalKcal = $bmrKcal + $stepsKcal + $workoutsKcal + $tefKcal;
+        $burnedComputedKcal = $bmrKcal + $stepsKcal + $workoutsKcal + $tefKcal;
+        $burnedTotalKcal = (int) ($energyTotals['burned_kcal'] ?? $burnedComputedKcal);
         $netKcal = $consumedKcal - $burnedTotalKcal;
         $weeklyFeedback = $this->resolveWeeklyDeficitFeedback($db, $date);
+        $correctionFactor = (float) ($weeklyFeedback['correction_factor'] ?? 1.0);
+        $safeCorrectionFactor = $correctionFactor > 0 ? $correctionFactor : 1.0;
+        $correctedConsumedKcal = (int) round($consumedKcal / $safeCorrectionFactor);
+        $correctedNetKcal = $correctedConsumedKcal - $burnedTotalKcal;
 
         return [
             'ok' => true,
@@ -211,13 +220,17 @@ final class EatApiController extends BaseApiController
                     'workouts_kcal' => $workoutsKcal,
                     'burned_total_kcal' => $burnedTotalKcal,
                     'net_kcal' => $netKcal,
+                    'corrected_consumed_kcal' => $correctedConsumedKcal,
+                    'corrected_net_kcal' => $correctedNetKcal,
+                    'deficit_correction_factor' => $correctionFactor,
+                    'deficit_correction_applied_to' => 'consumed_kcal',
                     'weekly_feedback' => $weeklyFeedback,
                 ],
             ],
         ];
     }
 
-    /** @return array{status: string, message: string, start_date: string, end_date: string, estimated_loss_kg: float, real_loss_kg: float|null, delta_kg: float|null, samples: int} */
+    /** @return array{status: string, message: string, start_date: string, end_date: string, estimated_loss_kg: float, real_loss_kg: float|null, delta_kg: float|null, estimated_deficit_kcal: int, real_deficit_kcal: int|null, correction_factor: float, samples: int} */
     private function resolveWeeklyDeficitFeedback($db, string $endDate): array
     {
         $startTs = strtotime($endDate . ' -6 days');
@@ -226,21 +239,10 @@ final class EatApiController extends BaseApiController
         $cursor = $startDate;
         $weeklyNetKcal = 0;
         for ($i = 0; $i < 7; $i++) {
-            $consumedKcal = $this->computeConsumedCaloriesForDate($db, $cursor);
             $dailyContext = $this->resolveDailyContext($db, $cursor);
-            $bmrKcal = (int) round($this->computeBmrMifflinStJeor(
-                $dailyContext['weight_kg'],
-                $dailyContext['height_cm'],
-                $dailyContext['age'],
-                $dailyContext['sex']
-            ));
-            $stepsKcal = (int) round($this->computeStepsCalories(
-                $dailyContext['steps'],
-                $dailyContext['weight_kg']
-            ));
-            $workoutsKcal = (int) round($this->computeWorkoutCalories($db, $cursor, $dailyContext['weight_kg']));
-            $tefKcal = (int) round($consumedKcal * 0.10);
-            $burnedTotalKcal = $bmrKcal + $stepsKcal + $workoutsKcal + $tefKcal;
+            $energyTotals = $this->resolveDailyEnergyTotalsForDate($db, $cursor, $dailyContext);
+            $consumedKcal = (int) ($energyTotals['consumed_kcal'] ?? 0);
+            $burnedTotalKcal = (int) ($energyTotals['burned_kcal'] ?? 0);
 
             $weeklyNetKcal += ($consumedKcal - $burnedTotalKcal);
 
@@ -252,6 +254,7 @@ final class EatApiController extends BaseApiController
         }
 
         $estimatedLossKg = round((-$weeklyNetKcal) / 7700, 2);
+        $estimatedDeficitKcal = (int) round(max(0.0, -$weeklyNetKcal));
 
         $weightRows = $db->select('user_info_register', ['date', 'weight'], [
             'date[>=]' => $startDate,
@@ -271,6 +274,9 @@ final class EatApiController extends BaseApiController
                 'estimated_loss_kg' => $estimatedLossKg,
                 'real_loss_kg' => null,
                 'delta_kg' => null,
+                'estimated_deficit_kcal' => $estimatedDeficitKcal,
+                'real_deficit_kcal' => null,
+                'correction_factor' => 1.0,
                 'samples' => $samples,
             ];
         }
@@ -279,6 +285,19 @@ final class EatApiController extends BaseApiController
         $lastWeight = (float) ($weightRows[$samples - 1]['weight'] ?? 0);
         $realLossKg = round($firstWeight - $lastWeight, 2);
         $deltaKg = round($estimatedLossKg - $realLossKg, 2);
+        $realDeficitKcal = (int) round(max(0.0, $realLossKg * 7700.0));
+
+        $correctionFactor = 1.0;
+        if ($estimatedDeficitKcal >= self::DEFICIT_CORRECTION_MIN_ESTIMATED_KCAL) {
+            $rawFactor = $estimatedDeficitKcal > 0
+                ? ($realDeficitKcal / (float) $estimatedDeficitKcal)
+                : 1.0;
+            $correctionFactor = round($this->clamp(
+                $rawFactor,
+                self::DEFICIT_CORRECTION_MIN,
+                self::DEFICIT_CORRECTION_MAX
+            ), 2);
+        }
 
         $threshold = 0.15;
         $status = 'aligned';
@@ -292,6 +311,8 @@ final class EatApiController extends BaseApiController
             $message = 'La perdida real esta por encima de la estimada: estas infraestimando el deficit calorico.';
         }
 
+        $message .= ' Factor aplicado: x' . number_format($correctionFactor, 2, '.', '');
+
         return [
             'status' => $status,
             'message' => $message,
@@ -300,8 +321,94 @@ final class EatApiController extends BaseApiController
             'estimated_loss_kg' => $estimatedLossKg,
             'real_loss_kg' => $realLossKg,
             'delta_kg' => $deltaKg,
+            'estimated_deficit_kcal' => $estimatedDeficitKcal,
+            'real_deficit_kcal' => $realDeficitKcal,
+            'correction_factor' => $correctionFactor,
             'samples' => $samples,
         ];
+    }
+
+    /**
+     * @param array{weight_kg: float, steps: int, sex: string, height_cm: float, age: int} $dailyContext
+     * @return array{consumed_kcal: int, burned_kcal: int, from_cache: bool}
+     */
+    private function resolveDailyEnergyTotalsForDate($db, string $date, array $dailyContext): array
+    {
+        $isPastDate = $this->isPastDate($date);
+        $register = $db->get('user_info_register', ['id', 'steps', 'kcal_consumed', 'kcal_burned'], [
+            'date' => $date,
+        ]);
+
+        if ($isPastDate && $register) {
+            $cachedBurned = (int) ($register['kcal_burned'] ?? 0);
+            $cachedConsumed = (int) ($register['kcal_consumed'] ?? 0);
+            if ($cachedBurned > 0) {
+                return [
+                    'consumed_kcal' => max(0, $cachedConsumed),
+                    'burned_kcal' => max(0, $cachedBurned),
+                    'from_cache' => true,
+                ];
+            }
+        }
+
+        $consumedKcal = $this->computeConsumedCaloriesForDate($db, $date);
+        $burnedKcal = $this->computeBurnedCaloriesForDate($db, $date, $dailyContext, $consumedKcal);
+
+        if ($isPastDate) {
+            if ($register && isset($register['id'])) {
+                $db->update('user_info_register', [
+                    'kcal_consumed' => $consumedKcal,
+                    'kcal_burned' => $burnedKcal,
+                ], [
+                    'id' => (int) $register['id'],
+                ]);
+            } else {
+                $db->insert('user_info_register', [
+                    'date' => $date,
+                    'steps' => max(0, (int) ($dailyContext['steps'] ?? 0)),
+                    'kcal_consumed' => $consumedKcal,
+                    'kcal_burned' => $burnedKcal,
+                ]);
+            }
+        }
+
+        return [
+            'consumed_kcal' => $consumedKcal,
+            'burned_kcal' => $burnedKcal,
+            'from_cache' => false,
+        ];
+    }
+
+    /**
+     * @param array{weight_kg: float, steps: int, sex: string, height_cm: float, age: int} $dailyContext
+     */
+    private function computeBurnedCaloriesForDate($db, string $date, array $dailyContext, int $consumedKcal): int
+    {
+        $bmrKcal = (int) round($this->computeBmrMifflinStJeor(
+            $dailyContext['weight_kg'],
+            $dailyContext['height_cm'],
+            $dailyContext['age'],
+            $dailyContext['sex']
+        ));
+        $stepsKcal = (int) round($this->computeStepsCalories(
+            $dailyContext['steps'],
+            $dailyContext['weight_kg']
+        ));
+        $workoutsKcal = (int) round($this->computeWorkoutCalories($db, $date, $dailyContext['weight_kg']));
+        $tefKcal = (int) round($consumedKcal * 0.10);
+
+        return $bmrKcal + $stepsKcal + $workoutsKcal + $tefKcal;
+    }
+
+    private function clamp(float $value, float $min, float $max): float
+    {
+        if ($value < $min) {
+            return $min;
+        }
+        if ($value > $max) {
+            return $max;
+        }
+        return $value;
     }
 
     private function computeConsumedCaloriesForDate($db, string $date): int
@@ -534,6 +641,11 @@ final class EatApiController extends BaseApiController
     private function isFutureDate(string $date): bool
     {
         return $date > date('Y-m-d');
+    }
+
+    private function isPastDate(string $date): bool
+    {
+        return $date < date('Y-m-d');
     }
 
     /** @return array<string, mixed> */
