@@ -12,6 +12,15 @@ const TASK_STATUS_LABELS = {
   done: 'Hecha',
 };
 
+// api() lanza si la respuesta no es JSON; aqui se convierte en un aviso visible.
+async function taskApi(path, body) {
+  try {
+    return await api(path, body);
+  } catch (err) {
+    return { ok: false, msg: 'Sin respuesta valida del servidor' };
+  }
+}
+
 function taskYmd(offsetDays = 0) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -129,7 +138,7 @@ function renderTaskDashboard() {
 }
 
 async function loadTaskDashboard() {
-  const res = await api('/api/task/dashboard', { date: taskYmd(0) });
+  const res = await taskApi('/api/task/dashboard', { date: taskYmd(0) });
   if (!res.ok) {
     toast(res.msg || 'Error cargando dashboard');
     return;
@@ -139,7 +148,7 @@ async function loadTaskDashboard() {
 }
 
 async function loadTaskInbox() {
-  const res = await api('/api/task/tasks/list', { filter: 'inbox' });
+  const res = await taskApi('/api/task/tasks/list', { filter: 'inbox' });
   if (!res.ok) {
     toast(res.msg || 'Error cargando inbox');
     return;
@@ -149,7 +158,7 @@ async function loadTaskInbox() {
 }
 
 async function loadTaskList() {
-  const res = await api('/api/task/tasks/list', { filter: taskFilter });
+  const res = await taskApi('/api/task/tasks/list', { filter: taskFilter });
   if (!res.ok) {
     toast(res.msg || 'Error cargando tareas');
     return;
@@ -168,7 +177,7 @@ async function quickCaptureTask(e) {
   const title = input.value.trim();
   if (!title) return false;
 
-  const res = await api('/api/task/tasks/add', { title, status: 'inbox' });
+  const res = await taskApi('/api/task/tasks/add', { title, status: 'inbox' });
   if (!res.ok) {
     toast(res.msg || 'No se pudo capturar');
     return false;
@@ -209,7 +218,7 @@ async function renderTaskParentOptions(selectedId, excludeId) {
   const sel = document.getElementById('task-parent');
   sel.innerHTML = '<option value="">Ninguna</option>';
 
-  const res = await api('/api/task/tasks/list', { filter: 'open' });
+  const res = await taskApi('/api/task/tasks/list', { filter: 'open' });
   const tasks = res.ok ? res.data : [];
   tasks
     .filter(t => t.id !== excludeId)
@@ -238,9 +247,21 @@ async function openTaskModal(id = null, parentId = null) {
   const dateEl = document.getElementById('task-date');
   if (dateEl._flatpickr) dateEl._flatpickr.setDate(task && task.scheduled_date ? task.scheduled_date : null, false);
 
-  await renderTaskParentOptions(task ? task.parent_id : parentId, task ? task.id : null);
+  const currentParentId = task ? task.parent_id : parentId;
+  const parentSel = document.getElementById('task-parent');
+  parentSel.innerHTML = '<option value="">Ninguna</option>';
+  if (currentParentId) {
+    const known = taskIndex[currentParentId];
+    const opt = document.createElement('option');
+    opt.value = String(currentParentId);
+    opt.textContent = known ? known.title : (task && task.parent_title) || `#${currentParentId}`;
+    parentSel.appendChild(opt);
+    parentSel.value = String(currentParentId);
+  }
   openModal('modal-task');
   document.getElementById('task-title').focus();
+
+  await renderTaskParentOptions(currentParentId, task ? task.id : null);
 }
 
 async function saveTask() {
@@ -264,7 +285,7 @@ async function saveTask() {
   if (id && taskIndex[id] && taskIndex[id].status === 'done') delete body.status;
   if (id) body.id = id;
 
-  const res = await api(id ? '/api/task/tasks/update' : '/api/task/tasks/add', body);
+  const res = await taskApi(id ? '/api/task/tasks/update' : '/api/task/tasks/add', body);
   if (!res.ok) {
     toast(res.msg || 'No se pudo guardar');
     return;
@@ -276,7 +297,7 @@ async function saveTask() {
 }
 
 async function toggleTask(id, done) {
-  const res = await api('/api/task/tasks/complete', { id, done });
+  const res = await taskApi('/api/task/tasks/complete', { id, done });
   if (!res.ok) {
     toast(res.msg || 'No se pudo actualizar');
     return;
@@ -296,7 +317,7 @@ async function deleteTask(id) {
   const extra = t && t.children_count > 0 ? ' Sus derivadas quedaran como tareas independientes.' : '';
   if (!confirm(`Eliminar "${t ? t.title : 'tarea'}"?${extra}`)) return;
 
-  const res = await api('/api/task/tasks/delete', { id });
+  const res = await taskApi('/api/task/tasks/delete', { id });
   if (!res.ok) {
     toast(res.msg || 'No se pudo eliminar');
     return;
