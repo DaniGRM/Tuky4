@@ -4,6 +4,7 @@ $isHome = $uri === '/' || $uri === '/index.php';
 $isGym = str_starts_with($uri, '/gym');
 $isEat = str_starts_with($uri, '/eat');
 $isMoney = str_starts_with($uri, '/money');
+$isTask = str_starts_with($uri, '/task');
 ?>
 
 <style>
@@ -25,7 +26,7 @@ $isMoney = str_starts_with($uri, '/money');
 .mobile-nav-list {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: .25rem;
 }
 
@@ -127,5 +128,14 @@ $isMoney = str_starts_with($uri, '/money');
         <span class="mobile-nav-label">Tuky4Money</span>
       </a>
     </li> -->
+    <li>
+      <a class="mobile-nav-link<?php echo $isTask ? ' active' : ''; ?>" href="/task" aria-label="Task">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="4" y="3.5" width="16" height="17" rx="2.5"/>
+          <path d="M8 12l2.5 2.5L16 9"/>
+        </svg>
+        <span class="mobile-nav-label">Tuky4Task</span>
+      </a>
+    </li>
   </ul>
 </nav>

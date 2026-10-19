@@ -4,9 +4,11 @@ declare(strict_types=1);
 use App\Controllers\Api\GymApiController;
 use App\Controllers\Api\EatApiController;
 use App\Controllers\Api\MoneyApiController;
+use App\Controllers\Api\TaskApiController;
 use App\Controllers\GymController;
 use App\Controllers\EatController;
 use App\Controllers\MoneyController;
+use App\Controllers\TaskController;
 use App\Controllers\HomeController;
 use App\Core\Router;
 
@@ -83,5 +85,14 @@ $router->post('/api/money/tags/list', [MoneyApiController::class, 'listTags']);
 $router->post('/api/money/tags/save', [MoneyApiController::class, 'saveTag']);
 $router->post('/api/money/tags/delete', [MoneyApiController::class, 'deleteTag']);
 $router->post('/api/money/tags/update-color', [MoneyApiController::class, 'updateTagColor']);
+
+$router->get('/task', [TaskController::class, 'index']);
+
+$router->post('/api/task/dashboard', [TaskApiController::class, 'dashboard']);
+$router->post('/api/task/tasks/list', [TaskApiController::class, 'listTasks']);
+$router->post('/api/task/tasks/add', [TaskApiController::class, 'addTask']);
+$router->post('/api/task/tasks/update', [TaskApiController::class, 'updateTask']);
+$router->post('/api/task/tasks/complete', [TaskApiController::class, 'completeTask']);
+$router->post('/api/task/tasks/delete', [TaskApiController::class, 'deleteTask']);
 
 return $router;
